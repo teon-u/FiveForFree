@@ -152,11 +152,11 @@ def check_system_requirements() -> bool:
         logger.error(f"✗ Database connection failed: {e}")
         return False
 
-    # Check Polygon API key
-    if not settings.POLYGON_API_KEY or settings.POLYGON_API_KEY == "your_api_key_here":
-        logger.error("✗ POLYGON_API_KEY not configured in .env file")
-        return False
-    logger.success("✓ Polygon API key configured")
+    # Check Finnhub API key
+    if not settings.FINNHUB_API_KEY or settings.FINNHUB_API_KEY == "your_finnhub_api_key_here":
+        logger.warning("⚠ FINNHUB_API_KEY not configured (optional for secondary data)")
+    else:
+        logger.success("✓ Finnhub API key configured")
 
     # Check GPU availability (optional)
     if settings.USE_GPU:

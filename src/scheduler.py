@@ -9,7 +9,7 @@ Manages all scheduled jobs:
 Uses timezone-aware scheduling for market hours (Eastern Time).
 """
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Optional, List
 import pytz
 
@@ -60,7 +60,7 @@ class NASDAQScheduler:
         self.enable_market_hours_check = enable_market_hours_check
 
         # Initialize components
-        self.minute_bar_collector = MinuteBarCollector()
+        self.minute_bar_collector = MinuteBarCollector(use_db=True)  # Enable incremental collection
         self.ticker_selector = TickerSelector()
         self.feature_engineer = FeatureEngineer()
         self.label_generator = LabelGenerator()
@@ -70,8 +70,8 @@ class NASDAQScheduler:
             model_manager, self.minute_bar_collector
         )
 
-        # Active ticker list (updated hourly)
-        self.active_tickers: List[str] = []
+        # Active ticker lists by category (updated hourly)
+        self.active_tickers: dict[str, List[str]] = {'volume': [], 'gainers': []}
 
         # Scheduler instance
         self.scheduler: Optional[BackgroundScheduler] = None
@@ -134,42 +134,34 @@ class NASDAQScheduler:
             logger.info("MINUTE JOB: Data Collection & Predictions")
             logger.info("=" * 80)
 
-            if not self.active_tickers:
+            # Get all unique tickers from both categories
+            all_tickers = set(self.active_tickers['volume'] + self.active_tickers['gainers'])
+
+            if not all_tickers:
                 logger.warning("No active tickers, skipping")
                 return
 
-            logger.info(f"Processing {len(self.active_tickers)} tickers...")
+            logger.info(
+                f"Processing {len(all_tickers)} tickers "
+                f"(volume: {len(self.active_tickers['volume'])}, "
+                f"gainers: {len(self.active_tickers['gainers'])})"
+            )
 
-            # Collect latest minute bars for all tickers
+            # Collect latest minute bars for all tickers using incremental collection
             collected = 0
             predicted = 0
 
-            for ticker in self.active_tickers:
+            # Use incremental collection (fetches last 10 minutes, auto-saves to DB)
+            from_time = datetime.now() - timedelta(minutes=10)
+            to_time = datetime.now()
+
+            for ticker in all_tickers:
                 try:
-                    # Get latest bar
-                    latest_bar = self.minute_bar_collector.get_latest_bar(ticker)
+                    # Use incremental collection - automatically handles DB storage
+                    bars = self.minute_bar_collector.get_bars(ticker, from_time, to_time)
 
-                    if latest_bar:
-                        # Save to database
-                        with get_db() as db:
-                            ticker_record = get_or_create_ticker(db, ticker)
-
-                            db_bar = DBMinuteBar(
-                                ticker_id=ticker_record.id,
-                                symbol=ticker,
-                                timestamp=latest_bar.datetime,
-                                open=latest_bar.open,
-                                high=latest_bar.high,
-                                low=latest_bar.low,
-                                close=latest_bar.close,
-                                volume=latest_bar.volume,
-                                vwap=latest_bar.vwap,
-                                trade_count=latest_bar.transactions,
-                            )
-
-                            db.add(db_bar)
-                            db.commit()
-
+                    if bars:
+                        latest_bar = bars[-1]  # Get most recent bar
                         collected += 1
 
                         # Generate prediction
@@ -191,7 +183,7 @@ class NASDAQScheduler:
                     continue
 
             logger.info(
-                f"Minute job complete: {collected} bars collected, "
+                f"Minute job complete: {collected} tickers processed, "
                 f"{predicted} predictions generated"
             )
 
@@ -262,19 +254,36 @@ class NASDAQScheduler:
             logger.info("HOURLY JOB: Update Target Tickers")
             logger.info("=" * 80)
 
-            # Get fresh ticker list
-            new_tickers = self.ticker_selector.get_target_tickers()
+            # Get fresh ticker lists by category
+            categories = self.ticker_selector.get_both_categories()
 
-            if new_tickers:
-                old_count = len(self.active_tickers)
-                self.active_tickers = new_tickers
+            if categories and (categories['volume'] or categories['gainers']):
+                old_volume_count = len(self.active_tickers['volume'])
+                old_gainers_count = len(self.active_tickers['gainers'])
+
+                # Extract ticker symbols from TickerMetrics
+                self.active_tickers = {
+                    'volume': [m.ticker for m in categories['volume']],
+                    'gainers': [m.ticker for m in categories['gainers']]
+                }
+
+                # Calculate total unique tickers
+                all_tickers = set(self.active_tickers['volume'] + self.active_tickers['gainers'])
 
                 logger.info(
-                    f"Updated ticker list: {old_count} -> {len(self.active_tickers)} tickers"
+                    f"Updated ticker lists:\n"
+                    f"  Volume:  {old_volume_count} -> {len(self.active_tickers['volume'])} tickers\n"
+                    f"  Gainers: {old_gainers_count} -> {len(self.active_tickers['gainers'])} tickers\n"
+                    f"  Total unique: {len(all_tickers)} tickers"
                 )
-                logger.info(f"Top 10 tickers: {', '.join(self.active_tickers[:10])}")
+                logger.info(
+                    f"Top 5 volume: {', '.join(self.active_tickers['volume'][:5])}"
+                )
+                logger.info(
+                    f"Top 5 gainers: {', '.join(self.active_tickers['gainers'][:5])}"
+                )
             else:
-                logger.warning("Failed to get new ticker list, keeping old list")
+                logger.warning("Failed to get new ticker lists, keeping old lists")
 
         except Exception as e:
             logger.error(f"Ticker update job failed: {e}")
@@ -297,11 +306,14 @@ class NASDAQScheduler:
             logger.info("DAILY JOB: Full Model Retraining")
             logger.info("=" * 80)
 
-            if not self.active_tickers:
+            # Get all unique tickers from both categories
+            all_tickers = list(set(self.active_tickers['volume'] + self.active_tickers['gainers']))
+
+            if not all_tickers:
                 logger.warning("No active tickers, skipping retraining")
                 return
 
-            logger.info(f"Retraining models for {len(self.active_tickers)} tickers...")
+            logger.info(f"Retraining models for {len(all_tickers)} tickers...")
 
             # Load and prepare data for each ticker
             import pandas as pd
@@ -311,9 +323,9 @@ class NASDAQScheduler:
             successful = 0
             failed = 0
 
-            for i, ticker in enumerate(self.active_tickers, 1):
+            for i, ticker in enumerate(all_tickers, 1):
                 try:
-                    logger.info(f"[{i}/{len(self.active_tickers)}] Retraining {ticker}...")
+                    logger.info(f"[{i}/{len(all_tickers)}] Retraining {ticker}...")
 
                     # Load last 30 days of data
                     cutoff_date = datetime.now() - timedelta(days=30)
@@ -550,10 +562,17 @@ class NASDAQScheduler:
                 }
             )
 
+        # Get all unique tickers
+        all_tickers = list(set(self.active_tickers['volume'] + self.active_tickers['gainers']))
+
         return {
             "running": True,
-            "active_tickers": len(self.active_tickers),
-            "tickers": self.active_tickers[:20],  # First 20
+            "active_tickers": len(all_tickers),
+            "tickers_by_category": {
+                "volume": self.active_tickers['volume'][:20],  # First 20
+                "gainers": self.active_tickers['gainers'][:20],
+            },
+            "total_unique_tickers": len(all_tickers),
             "jobs": jobs_info,
             "job_stats": self.job_stats,
             "market_hours": self.is_market_hours(),

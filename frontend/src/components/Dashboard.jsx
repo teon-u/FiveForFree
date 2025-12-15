@@ -6,6 +6,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('volume') // 'volume' or 'gainers'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
   const { filterMode } = useSettingsStore()
 
@@ -23,6 +24,17 @@ export default function Dashboard() {
 
   const filteredVolumeTop100 = filterPredictions(volumeTop100)
   const filteredGainersTop100 = filterPredictions(gainersTop100)
+
+  // Get currently active predictions based on toggle
+  const activePredictions = activeCategory === 'volume'
+    ? filteredVolumeTop100
+    : filteredGainersTop100
+
+  const categoryTitle = activeCategory === 'volume'
+    ? 'Volume Top 100'
+    : 'Gainers Top 100'
+
+  const categoryIcon = activeCategory === 'volume' ? '📊' : '📈'
 
   if (error) {
     return (
@@ -48,37 +60,60 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Volume Top 100 Section */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <span className="text-2xl">📊</span>
-            Volume Top 100
-            <span className="text-sm text-gray-400 font-normal">
-              ({filteredVolumeTop100?.length || 0} tickers)
+    <div className="space-y-6">
+      {/* Category Toggle Button */}
+      <div className="flex justify-center">
+        <div className="inline-flex rounded-lg bg-gray-800 p-1 gap-1">
+          <button
+            onClick={() => setActiveCategory('volume')}
+            className={`
+              px-6 py-2.5 rounded-lg font-medium transition-all duration-200
+              flex items-center gap-2
+              ${activeCategory === 'volume'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }
+            `}
+          >
+            <span className="text-lg">📊</span>
+            거래량
+            <span className="text-xs opacity-75">
+              ({filteredVolumeTop100?.length || 0})
             </span>
-          </h2>
+          </button>
+          <button
+            onClick={() => setActiveCategory('gainers')}
+            className={`
+              px-6 py-2.5 rounded-lg font-medium transition-all duration-200
+              flex items-center gap-2
+              ${activeCategory === 'gainers'
+                ? 'bg-green-600 text-white shadow-lg shadow-green-500/50'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }
+            `}
+          >
+            <span className="text-lg">📈</span>
+            상승률
+            <span className="text-xs opacity-75">
+              ({filteredGainersTop100?.length || 0})
+            </span>
+          </button>
         </div>
-        <TickerGrid
-          predictions={filteredVolumeTop100}
-          onTickerClick={setSelectedTicker}
-        />
-      </section>
+      </div>
 
-      {/* Gainers Top 100 Section */}
+      {/* Active Category Section */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <span className="text-2xl">📈</span>
-            Gainers Top 100
+            <span className="text-2xl">{categoryIcon}</span>
+            {categoryTitle}
             <span className="text-sm text-gray-400 font-normal">
-              ({filteredGainersTop100?.length || 0} tickers)
+              ({activePredictions?.length || 0} tickers)
             </span>
           </h2>
         </div>
         <TickerGrid
-          predictions={filteredGainersTop100}
+          predictions={activePredictions}
           onTickerClick={setSelectedTicker}
         />
       </section>
