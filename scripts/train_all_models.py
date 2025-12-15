@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import List, Optional
 import warnings
 
+from tqdm import tqdm
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -414,10 +416,19 @@ def main() -> int:
 
         start_time = datetime.now()
 
-        for i, ticker in enumerate(tickers, 1):
-            logger.info(f"\n{'='*80}")
-            logger.info(f"[{i}/{len(tickers)}] Training {ticker}")
-            logger.info("=" * 80)
+        # Create progress bar
+        pbar = tqdm(
+            tickers,
+            desc="Training models",
+            unit="ticker",
+            ncols=100,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
+        )
+
+        for ticker in pbar:
+            # Update progress bar description
+            pbar.set_description(f"Training {ticker}")
+            pbar.set_postfix({"success": successful, "failed": failed})
 
             stats = train_ticker_models(
                 ticker,
@@ -436,18 +447,12 @@ def main() -> int:
             # Clear GPU memory
             trainer.clear_gpu_memory()
 
-            # Progress update
-            if i % 5 == 0:
-                elapsed = (datetime.now() - start_time).total_seconds()
-                avg_time = elapsed / i
-                remaining = (len(tickers) - i) * avg_time
-                logger.info(
-                    f"\n{'='*80}\n"
-                    f"Progress: {i}/{len(tickers)} ({i/len(tickers)*100:.1f}%)\n"
-                    f"Success: {successful} | Failed: {failed}\n"
-                    f"ETA: {remaining/60:.1f} minutes\n"
-                    f"{'='*80}"
-                )
+            # Update postfix with latest stats
+            pbar.set_postfix({
+                "success": successful,
+                "failed": failed,
+                "last": f"{stats.get('elapsed_seconds', 0):.1f}s"
+            })
 
         # Summary
         elapsed_total = (datetime.now() - start_time).total_seconds()
