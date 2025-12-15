@@ -1,31 +1,24 @@
-"""Market context data collection module for SPY, QQQ, VIX, and sector ETFs."""
+"""Market context data collection module using Finnhub API."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass, asdict
 from enum import Enum
 
 import pandas as pd
 from loguru import logger
 
-from config.settings import settings
-from src.collector.polygon_client import get_polygon_client, PolygonClientWrapper
+from src.collector.finnhub_client import get_finnhub_client, FinnhubClientWrapper
 
 
 class SectorETF(Enum):
-    """Major sector ETFs for market context."""
-    # SPDR Sector ETFs
+    """Major sector ETFs for market context (limited to 6 for API quota)."""
     XLK = "XLK"  # Technology
     XLF = "XLF"  # Financials
     XLV = "XLV"  # Healthcare
     XLE = "XLE"  # Energy
-    XLY = "XLY"  # Consumer Discretionary
-    XLP = "XLP"  # Consumer Staples
     XLI = "XLI"  # Industrials
-    XLB = "XLB"  # Materials
-    XLU = "XLU"  # Utilities
-    XLRE = "XLRE"  # Real Estate
-    XLC = "XLC"  # Communication Services
+    XLP = "XLP"  # Consumer Staples
 
 
 @dataclass
@@ -34,11 +27,11 @@ class MarketIndicator:
     Market-wide indicator data.
 
     Attributes:
-        symbol: Ticker symbol (SPY, QQQ, VIX, etc.)
+        symbol: Ticker symbol (SPY, QQQ, VXX, etc.)
         timestamp: Data timestamp
         price: Current price
         change_percent: Percentage change from previous close
-        volume: Trading volume
+        volume: Trading volume (not available in Finnhub quote)
         prev_close: Previous close price
     """
     symbol: str
@@ -87,15 +80,15 @@ class MarketContext:
         timestamp: Snapshot timestamp
         spy: S&P 500 ETF indicator
         qqq: NASDAQ 100 ETF indicator
-        vix: Volatility index
-        sectors: List of sector performances
+        vxx: VIX ETF proxy (VXX)
+        sectors: List of sector performances (6 major sectors)
         market_regime: Market regime classification
         risk_level: Risk level (0-100)
     """
     timestamp: datetime
     spy: MarketIndicator
     qqq: MarketIndicator
-    vix: MarketIndicator
+    vxx: MarketIndicator
     sectors: List[SectorPerformance]
     market_regime: Optional[str] = None
     risk_level: Optional[float] = None
@@ -109,53 +102,48 @@ class MarketContext:
 
 class MarketContextCollector:
     """
-    Collector for market-wide context data.
+    Collector for market-wide context data using Finnhub API.
 
     Provides methods to fetch and analyze market indicators including:
     - SPY (S&P 500 ETF)
     - QQQ (NASDAQ 100 ETF)
-    - VIX (Volatility Index)
-    - 11 Sector ETFs
+    - VXX (VIX ETF proxy - since VIX direct data may be limited)
+    - 6 Major Sector ETFs (limited for API quota management)
     """
 
     # Major market indices/ETFs
     MARKET_INDICES = {
         'SPY': 'S&P 500 ETF',
         'QQQ': 'NASDAQ 100 ETF',
-        'VIX': 'CBOE Volatility Index'
+        'VXX': 'VIX ETF (Volatility Proxy)'
     }
 
-    # Sector ETF mapping
+    # Sector ETF mapping (limited to 6 for API quota)
     SECTOR_MAPPING = {
         'XLK': 'Technology',
         'XLF': 'Financials',
         'XLV': 'Healthcare',
         'XLE': 'Energy',
-        'XLY': 'Consumer Discretionary',
-        'XLP': 'Consumer Staples',
         'XLI': 'Industrials',
-        'XLB': 'Materials',
-        'XLU': 'Utilities',
-        'XLRE': 'Real Estate',
-        'XLC': 'Communication Services'
+        'XLP': 'Consumer Staples'
     }
 
-    def __init__(self, client: Optional[PolygonClientWrapper] = None):
+    def __init__(self, client: Optional[FinnhubClientWrapper] = None):
         """
         Initialize market context collector.
 
         Args:
-            client: Polygon client wrapper (uses global if not provided)
+            client: Finnhub client wrapper (uses global if not provided)
         """
-        self.client = client or get_polygon_client()
-        logger.info("MarketContextCollector initialized")
+        self.client = client or get_finnhub_client()
+        logger.info("MarketContextCollector initialized with Finnhub")
 
     def get_market_indicator(self, symbol: str) -> Optional[MarketIndicator]:
         """
         Get current data for a market indicator.
 
         Args:
-            symbol: Ticker symbol (SPY, QQQ, VIX, etc.)
+            symbol: Ticker symbol (SPY, QQQ, VXX, etc.)
 
         Returns:
             MarketIndicator object or None
@@ -163,51 +151,39 @@ class MarketContextCollector:
         try:
             logger.debug(f"Fetching market indicator for {symbol}")
 
-            snapshot = self.client.get_snapshot_ticker("stocks", symbol)
+            # Get quote from Finnhub
+            quote = self.client.get_quote(symbol)
 
-            if not snapshot:
-                logger.debug(f"No snapshot available for {symbol}")
+            if not quote:
+                logger.debug(f"No quote available for {symbol}")
                 return None
 
-            # Extract data
-            day_data = snapshot.day if hasattr(snapshot, 'day') else None
-            prev_day = snapshot.prevDay if hasattr(snapshot, 'prevDay') else None
+            # Extract data from Finnhub quote
+            # Keys: c (current), h (high), l (low), o (open), pc (prev close), t (timestamp)
+            current_price = quote.get('c')
+            prev_close = quote.get('pc')
+            timestamp = quote.get('t')
 
-            if not day_data:
+            if current_price is None or prev_close is None:
+                logger.debug(f"Incomplete data for {symbol}")
                 return None
-
-            # Get current price
-            price = getattr(day_data, 'c', None) or getattr(day_data, 'close', None)
-            if not price and hasattr(snapshot, 'last_trade'):
-                price = getattr(snapshot.last_trade, 'p', None)
-
-            # Get volume
-            volume = getattr(day_data, 'v', None) or getattr(day_data, 'volume', None) or 0
-
-            # Get previous close
-            prev_close = getattr(prev_day, 'c', None) if prev_day else None
-            if not prev_close and hasattr(day_data, 'o'):
-                prev_close = day_data.o
 
             # Calculate change percent
-            if price and prev_close and prev_close > 0:
-                change_percent = ((price - prev_close) / prev_close) * 100
+            if prev_close > 0:
+                change_percent = ((current_price - prev_close) / prev_close) * 100
             else:
-                change_percent = getattr(snapshot, 'todaysChangePerc', 0) or 0
-
-            if not price or not prev_close:
-                return None
+                change_percent = 0.0
 
             indicator = MarketIndicator(
                 symbol=symbol,
-                timestamp=datetime.now(),
-                price=float(price),
+                timestamp=datetime.fromtimestamp(timestamp) if timestamp else datetime.now(),
+                price=float(current_price),
                 change_percent=float(change_percent),
-                volume=float(volume),
+                volume=0.0,  # Volume not provided in Finnhub quote endpoint
                 prev_close=float(prev_close)
             )
 
-            logger.debug(f"{symbol}: ${price:.2f} ({change_percent:+.2f}%)")
+            logger.debug(f"{symbol}: ${current_price:.2f} ({change_percent:+.2f}%)")
 
             return indicator
 
@@ -249,14 +225,14 @@ class MarketContextCollector:
 
     def get_all_sectors(self) -> List[SectorPerformance]:
         """
-        Get performance data for all sector ETFs.
+        Get performance data for all tracked sector ETFs (6 major sectors).
 
         Returns:
             List of SectorPerformance objects sorted by performance
         """
         sectors = []
 
-        logger.info("Fetching all sector ETF data...")
+        logger.info("Fetching sector ETF data (6 sectors)...")
 
         for etf_symbol in self.SECTOR_MAPPING.keys():
             performance = self.get_sector_performance(etf_symbol)
@@ -271,7 +247,7 @@ class MarketContextCollector:
             sector.rank = rank
 
         logger.info(
-            f"Fetched {len(sectors)}/11 sector ETFs. "
+            f"Fetched {len(sectors)}/6 sector ETFs. "
             f"Top: {sectors[0].sector if sectors else 'N/A'}"
         )
 
@@ -290,7 +266,7 @@ class MarketContextCollector:
             # Get major indices
             spy = self.get_market_indicator('SPY')
             qqq = self.get_market_indicator('QQQ')
-            vix = self.get_market_indicator('VIX')
+            vxx = self.get_market_indicator('VXX')  # VIX proxy
 
             # Check if we have essential data
             if not spy or not qqq:
@@ -301,16 +277,16 @@ class MarketContextCollector:
             sectors = self.get_all_sectors()
 
             # Determine market regime
-            market_regime = self._classify_market_regime(spy, qqq, vix)
+            market_regime = self._classify_market_regime(spy, qqq, vxx)
 
             # Calculate risk level
-            risk_level = self._calculate_risk_level(spy, qqq, vix, sectors)
+            risk_level = self._calculate_risk_level(spy, qqq, vxx, sectors)
 
             context = MarketContext(
                 timestamp=datetime.now(),
                 spy=spy,
                 qqq=qqq,
-                vix=vix or self._create_fallback_vix(),
+                vxx=vxx or self._create_fallback_vxx(),
                 sectors=sectors,
                 market_regime=market_regime,
                 risk_level=risk_level
@@ -319,7 +295,7 @@ class MarketContextCollector:
             logger.info(
                 f"Market context: SPY {spy.change_percent:+.2f}%, "
                 f"QQQ {qqq.change_percent:+.2f}%, "
-                f"VIX ${vix.price:.2f if vix else 'N/A'}, "
+                f"VXX ${vxx.price:.2f if vxx else 'N/A'}, "
                 f"Regime: {market_regime}"
             )
 
@@ -333,15 +309,15 @@ class MarketContextCollector:
         self,
         spy: MarketIndicator,
         qqq: MarketIndicator,
-        vix: Optional[MarketIndicator]
+        vxx: Optional[MarketIndicator]
     ) -> str:
         """
-        Classify current market regime.
+        Classify current market regime (simplified).
 
         Args:
             spy: SPY indicator
             qqq: QQQ indicator
-            vix: VIX indicator (optional)
+            vxx: VXX indicator (VIX proxy)
 
         Returns:
             Market regime classification
@@ -349,7 +325,6 @@ class MarketContextCollector:
         try:
             spy_change = spy.change_percent
             qqq_change = qqq.change_percent
-            vix_level = vix.price if vix else None
 
             # Strong uptrend
             if spy_change > 1.0 and qqq_change > 1.0:
@@ -367,8 +342,8 @@ class MarketContextCollector:
             if spy_change < -0.3 and qqq_change < -0.3:
                 return "downtrend"
 
-            # High volatility (if VIX available)
-            if vix_level and vix_level > 30:
+            # High volatility (VXX rising significantly)
+            if vxx and vxx.change_percent > 10:
                 return "high_volatility"
 
             # Divergence (SPY up, QQQ down or vice versa)
@@ -386,18 +361,18 @@ class MarketContextCollector:
         self,
         spy: MarketIndicator,
         qqq: MarketIndicator,
-        vix: Optional[MarketIndicator],
+        vxx: Optional[MarketIndicator],
         sectors: List[SectorPerformance]
     ) -> float:
         """
-        Calculate market risk level (0-100).
+        Calculate market risk level (0-100) - simplified version.
 
         Higher values indicate higher risk.
 
         Args:
             spy: SPY indicator
             qqq: QQQ indicator
-            vix: VIX indicator
+            vxx: VXX indicator (VIX proxy)
             sectors: List of sector performances
 
         Returns:
@@ -406,11 +381,11 @@ class MarketContextCollector:
         try:
             risk_components = []
 
-            # 1. VIX level (if available)
-            if vix:
-                # Normalize VIX (typical range: 10-80)
-                vix_risk = min(100, (vix.price / 50) * 100)
-                risk_components.append(vix_risk * 0.4)  # 40% weight
+            # 1. VXX level (if available) - proxy for VIX
+            if vxx:
+                # VXX typical range: $10-50, normalize to 0-100
+                vxx_risk = min(100, (vxx.price / 40) * 100)
+                risk_components.append(vxx_risk * 0.4)  # 40% weight
 
             # 2. Market decline
             avg_decline = (abs(min(0, spy.change_percent)) + abs(min(0, qqq.change_percent))) / 2
@@ -440,17 +415,17 @@ class MarketContextCollector:
             logger.debug(f"Failed to calculate risk level: {str(e)}")
             return 50.0
 
-    def _create_fallback_vix(self) -> MarketIndicator:
+    def _create_fallback_vxx(self) -> MarketIndicator:
         """
-        Create a fallback VIX indicator when data is unavailable.
+        Create a fallback VXX indicator when data is unavailable.
 
         Returns:
-            MarketIndicator with neutral VIX values
+            MarketIndicator with neutral VXX values
         """
         return MarketIndicator(
-            symbol='VIX',
+            symbol='VXX',
             timestamp=datetime.now(),
-            price=20.0,  # Neutral VIX level
+            price=20.0,  # Neutral VXX level
             change_percent=0.0,
             volume=0.0,
             prev_close=20.0
@@ -458,7 +433,7 @@ class MarketContextCollector:
 
     def get_market_breadth(self) -> Dict[str, float]:
         """
-        Calculate market breadth indicators.
+        Calculate market breadth indicators from sector data.
 
         Returns:
             Dictionary with breadth metrics
@@ -513,43 +488,13 @@ class MarketContextCollector:
             return {'leading': [], 'lagging': []}
 
         # Already sorted by performance (descending)
-        leading = [s.sector for s in sectors[:top_n]]
-        lagging = [s.sector for s in sectors[-top_n:]]
+        leading = [s.sector for s in sectors[:min(top_n, len(sectors))]]
+        lagging = [s.sector for s in sectors[-min(top_n, len(sectors)):]]
 
         return {
             'leading': leading,
             'lagging': lagging
         }
-
-    def is_market_open(self) -> bool:
-        """
-        Check if market is currently open (basic check).
-
-        Returns:
-            True if likely open, False otherwise
-        """
-        now = datetime.now()
-
-        # Check if weekend
-        if now.weekday() >= 5:  # Saturday = 5, Sunday = 6
-            return False
-
-        # Check market hours (9:30 AM - 4:00 PM ET)
-        # Note: This is a simplified check without timezone handling
-        market_open = now.replace(
-            hour=settings.MARKET_OPEN_HOUR,
-            minute=settings.MARKET_OPEN_MINUTE,
-            second=0,
-            microsecond=0
-        )
-        market_close = now.replace(
-            hour=settings.MARKET_CLOSE_HOUR,
-            minute=settings.MARKET_CLOSE_MINUTE,
-            second=0,
-            microsecond=0
-        )
-
-        return market_open <= now <= market_close
 
     def get_context_features(self) -> Optional[Dict[str, float]]:
         """
@@ -567,8 +512,8 @@ class MarketContextCollector:
         features = {
             'spy_return': context.spy.change_percent,
             'qqq_return': context.qqq.change_percent,
-            'vix_level': context.vix.price,
-            'vix_change': context.vix.change_percent,
+            'vxx_level': context.vxx.price,
+            'vxx_change': context.vxx.change_percent,
             'risk_level': context.risk_level or 50.0,
         }
 
@@ -587,7 +532,7 @@ class MarketContextCollector:
             features['breadth_ratio'] = breadth.get('breadth_ratio', 0.5)
             features['rotation_intensity'] = breadth.get('rotation_intensity', 0.0)
 
-        # Market regime encoding (one-hot style)
+        # Market regime encoding
         regime_map = {
             'strong_uptrend': 2,
             'uptrend': 1,

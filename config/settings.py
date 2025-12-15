@@ -6,13 +6,14 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Polygon.io API
-    POLYGON_API_KEY: str
+    # Finnhub API
+    FINNHUB_API_KEY: str
 
     # Collection Settings
-    TOP_N_VOLUME: int = 100
-    TOP_N_GAINERS: int = 100
+    TOP_N_VOLUME: int = 50  # Reduced for free tier API limits
+    TOP_N_GAINERS: int = 50  # Reduced for free tier API limits
     HISTORICAL_DAYS: int = 30
+    API_CALL_DELAY: float = 1.0  # 60 calls/minute = 1 call/second
 
     # Prediction Settings
     PREDICTION_HORIZON_MINUTES: int = 60
@@ -46,7 +47,7 @@ class Settings(BaseSettings):
     CALIBRATION_METHOD: str = "isotonic"  # "platt" or "isotonic" for probability calibration
 
     # Feature Engineering
-    NUM_FEATURES: int = 57
+    NUM_FEATURES: int = 49  # Reduced (Level 2 order book features removed)
 
     # Training Settings
     N_PARALLEL_WORKERS: int = 4

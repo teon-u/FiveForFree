@@ -4,10 +4,10 @@ NASDAQ 주식의 1시간 내 5% 이상 가격 변동 확률을 예측하는 AI �
 
 ## 🎯 개요
 
-- **타겟**: 고변동성 NASDAQ 주식 (거래량 상위 100개 + 상승률 상위 100개)
+- **타겟**: 고변동성 NASDAQ 주식 (인기 종목 중 거래량 상위 50개 + 상승률 상위 50개)
 - **예측**: 향후 60분 내 5% 이상 상승/하락 확률
 - **모델**: 종목당 5가지 ML 모델 (XGBoost, LightGBM, LSTM, Transformer, Ensemble)
-- **데이터 소스**: Polygon.io Developer Plan ($79/월)
+- **데이터 소스**: Finnhub 무료 티어 (무료!) + Yahoo Finance
 - **하드웨어**: RTX 5080 GPU, AMD Ryzen 9800X3D, 64GB RAM
 
 ## 🚀 빠른 시작
@@ -48,7 +48,8 @@ cd ..
 # 환경 변수 템플릿 복사
 cp .env.example .env
 
-# .env 파일을 열어 Polygon.io API 키 추가
+# .env 파일을 열어 Finnhub API 키 추가
+# Finnhub 무료 API 키 발급: https://finnhub.io/register
 nano .env
 ```
 
@@ -103,7 +104,7 @@ FiveForFree/
 ### 백엔드
 - **API**: FastAPI + WebSocket
 - **ML**: XGBoost, LightGBM, PyTorch (LSTM/Transformer)
-- **데이터**: Polygon.io API, Pandas, NumPy
+- **데이터**: Finnhub API (무료), Yahoo Finance, Pandas, NumPy
 - **데이터베이스**: SQLite (SQLAlchemy)
 - **스케줄러**: APScheduler
 
@@ -117,13 +118,15 @@ FiveForFree/
 ## 📊 주요 기능
 
 ### 데이터 수집
-- ✅ 매시간 종목 선정 (거래량 상위 + 상승률 상위)
-- ✅ 분단위 OHLCV 봉 + VWAP
-- ✅ Level 2 호가창 (매수/매도 불균형)
-- ✅ 시장 맥락 (SPY, QQQ, VIX, 섹터)
+- ✅ 매시간 종목 선정 (인기 종목 중 거래량 상위 + 상승률 상위)
+- ✅ 5분봉 OHLCV 데이터 + VWAP 계산
+- ✅ 실시간 호가 (현재가, 고가, 저가)
+- ✅ 시장 맥락 (SPY, QQQ, VXX, 주요 섹터 ETF)
 
 ### 피처 엔지니어링
-- 📈 7개 카테고리에 걸친 57개 피처 생성
+- 📈 6개 카테고리에 걸친 49개 피처 생성
+  - 가격 기반 (15), 변동성 (10), 거래량 (8)
+  - 모멘텀 (8), 시장 맥락 (5), 시간 (3)
 - 🎯 자동 레이블 생성 (5% 임계값)
 - ⚡ GPU 가속 처리
 

@@ -1,4 +1,4 @@
-"""Minute bar (OHLCV) data collection module."""
+"""Minute bar (OHLCV) data collection module using Finnhub API."""
 
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
@@ -8,7 +8,7 @@ import pandas as pd
 from loguru import logger
 
 from config.settings import settings
-from src.collector.polygon_client import get_polygon_client, PolygonClientWrapper
+from src.collector.finnhub_client import get_finnhub_client, FinnhubClientWrapper
 
 
 @dataclass
@@ -24,8 +24,8 @@ class MinuteBar:
         low: Lowest price
         close: Closing price
         volume: Trading volume
-        vwap: Volume-weighted average price
-        transactions: Number of transactions
+        vwap: Volume-weighted average price (calculated)
+        transactions: Number of transactions (not available in Finnhub)
     """
     ticker: str
     timestamp: int
@@ -49,21 +49,23 @@ class MinuteBar:
 
 class MinuteBarCollector:
     """
-    Collector for minute-level OHLCV bar data.
+    Collector for minute-level OHLCV bar data using Finnhub API.
 
     Provides methods to fetch historical and real-time minute bars
     for individual tickers or batches.
+
+    Note: Uses 5-minute candles (resolution='5') for stability on free tier.
     """
 
-    def __init__(self, client: Optional[PolygonClientWrapper] = None):
+    def __init__(self, client: Optional[FinnhubClientWrapper] = None):
         """
         Initialize minute bar collector.
 
         Args:
-            client: Polygon client wrapper (uses global if not provided)
+            client: Finnhub client wrapper (uses global if not provided)
         """
-        self.client = client or get_polygon_client()
-        logger.info("MinuteBarCollector initialized")
+        self.client = client or get_finnhub_client()
+        logger.info("MinuteBarCollector initialized with Finnhub")
 
     def get_bars(
         self,
@@ -73,52 +75,76 @@ class MinuteBarCollector:
         limit: int = 50000
     ) -> List[MinuteBar]:
         """
-        Get minute bars for a ticker within a date range.
+        Get 5-minute bars for a ticker within a date range.
 
         Args:
             ticker: Stock ticker symbol
             from_date: Start datetime
             to_date: End datetime
-            limit: Maximum number of bars to return
+            limit: Maximum number of bars to return (not enforced by Finnhub)
 
         Returns:
             List of MinuteBar objects
         """
         try:
             logger.debug(
-                f"Fetching minute bars for {ticker}: "
+                f"Fetching 5-minute bars for {ticker}: "
                 f"{from_date.strftime('%Y-%m-%d %H:%M')} to "
                 f"{to_date.strftime('%Y-%m-%d %H:%M')}"
             )
 
-            # Get raw bars from API
-            raw_bars = self.client.get_minute_bars(ticker, from_date, to_date, limit)
+            # Convert datetime to Unix timestamps
+            from_ts = int(from_date.timestamp())
+            to_ts = int(to_date.timestamp())
 
-            if not raw_bars:
+            # Get candles from Finnhub (resolution='5' for 5-minute candles)
+            result = self.client.get_candles(
+                symbol=ticker,
+                resolution='5',
+                from_ts=from_ts,
+                to_ts=to_ts
+            )
+
+            # Check if data is available
+            if not result or result.get('s') != 'ok':
                 logger.debug(f"No bars found for {ticker}")
+                return []
+
+            # Extract data arrays
+            timestamps = result.get('t', [])  # Unix timestamps
+            opens = result.get('o', [])
+            highs = result.get('h', [])
+            lows = result.get('l', [])
+            closes = result.get('c', [])
+            volumes = result.get('v', [])
+
+            if not timestamps:
                 return []
 
             # Convert to MinuteBar objects
             bars = []
-            for bar in raw_bars:
+            for i in range(len(timestamps)):
                 try:
+                    # Calculate VWAP as (high + low + close) / 3
+                    vwap = (highs[i] + lows[i] + closes[i]) / 3
+
                     minute_bar = MinuteBar(
                         ticker=ticker,
-                        timestamp=int(bar.timestamp) if hasattr(bar, 'timestamp') else int(bar.t),
-                        open=float(bar.open) if hasattr(bar, 'open') else float(bar.o),
-                        high=float(bar.high) if hasattr(bar, 'high') else float(bar.h),
-                        low=float(bar.low) if hasattr(bar, 'low') else float(bar.l),
-                        close=float(bar.close) if hasattr(bar, 'close') else float(bar.c),
-                        volume=float(bar.volume) if hasattr(bar, 'volume') else float(bar.v),
-                        vwap=float(bar.vwap) if hasattr(bar, 'vwap') else float(getattr(bar, 'vw', 0)) or None,
-                        transactions=int(bar.transactions) if hasattr(bar, 'transactions') else int(getattr(bar, 'n', 0)) or None
+                        timestamp=int(timestamps[i] * 1000),  # Convert to milliseconds
+                        open=float(opens[i]),
+                        high=float(highs[i]),
+                        low=float(lows[i]),
+                        close=float(closes[i]),
+                        volume=float(volumes[i]),
+                        vwap=float(vwap),
+                        transactions=None  # Not available in Finnhub
                     )
                     bars.append(minute_bar)
                 except Exception as e:
-                    logger.debug(f"Failed to parse bar: {str(e)}")
+                    logger.debug(f"Failed to parse bar at index {i}: {str(e)}")
                     continue
 
-            logger.info(f"Collected {len(bars)} minute bars for {ticker}")
+            logger.info(f"Collected {len(bars)} 5-minute bars for {ticker}")
             return bars
 
         except Exception as e:
@@ -320,8 +346,8 @@ class MinuteBarCollector:
         Returns:
             Latest MinuteBar or None
         """
-        # Get last 5 minutes to ensure we have data
-        bars = self.get_recent_bars(ticker, minutes=5)
+        # Get last 30 minutes to ensure we have data (5-min resolution)
+        bars = self.get_recent_bars(ticker, minutes=30)
 
         if not bars:
             return None

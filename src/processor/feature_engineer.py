@@ -1,11 +1,11 @@
 """
 Feature Engineering Module for NASDAQ Prediction System
 
-Generates 57 features across 7 categories:
+Generates 49 features across 7 categories:
 - Price-based (15)
 - Volatility-based (10)
 - Volume-based (8)
-- Order book (8)
+- Order book (0)
 - Momentum (8)
 - Market context (5)
 - Time-based (3)
@@ -71,7 +71,7 @@ class FeatureEngineer:
         market_data: Optional[Dict] = None
     ) -> pd.DataFrame:
         """
-        Compute all 57 features from minute bar data.
+        Compute all 49 features from minute bar data.
 
         Args:
             df: DataFrame with columns [timestamp, open, high, low, close, volume, vwap]
@@ -102,7 +102,7 @@ class FeatureEngineer:
         # 3. Volume-based features (8)
         df = self._add_volume_features(df)
 
-        # 4. Order book features (8)
+        # 4. Order book features (0)
         df = self._add_order_book_features(df, order_book)
 
         # 5. Momentum features (8)
@@ -281,14 +281,14 @@ class FeatureEngineer:
         8: order_flow_imbalance
         """
         if order_book is None:
-            # Set default values when order book data is not available
+            # Set default values when order book data is not available (Finnhub doesn't provide Level 2 data)
             df['bid_ask_spread'] = 0.0
             df['spread_pct'] = 0.0
             df['imbalance'] = 0.0
             df['bid_depth'] = 0.0
             df['ask_depth'] = 0.0
-            df['depth_ratio'] = 1.0
-            df['depth_weighted_mid_price'] = df['close']
+            df['depth_ratio'] = 0.0
+            df['depth_weighted_mid_price'] = 0.0
             df['order_flow_imbalance'] = 0.0
         else:
             # Extract order book data
@@ -333,8 +333,8 @@ class FeatureEngineer:
                 df['imbalance'] = 0.0
                 df['bid_depth'] = 0.0
                 df['ask_depth'] = 0.0
-                df['depth_ratio'] = 1.0
-                df['depth_weighted_mid_price'] = df['close']
+                df['depth_ratio'] = 0.0
+                df['depth_weighted_mid_price'] = 0.0
                 df['order_flow_imbalance'] = 0.0
 
         return df
@@ -486,7 +486,7 @@ class FeatureEngineer:
 
     def get_feature_names(self) -> List[str]:
         """
-        Get list of all 57 feature names.
+        Get list of all 49 feature names.
 
         Returns:
             List of feature names in order
@@ -507,11 +507,6 @@ class FeatureEngineer:
             # Volume-based (8)
             'volume_ratio', 'volume_ma_5', 'volume_ma_15', 'volume_trend',
             'obv_normalized', 'money_flow_ratio', 'mfi_14', 'vpt_cumsum',
-
-            # Order book (8)
-            'bid_ask_spread', 'spread_pct', 'imbalance',
-            'bid_depth', 'ask_depth', 'depth_ratio',
-            'depth_weighted_mid_price', 'order_flow_imbalance',
 
             # Momentum (8)
             'rsi_14', 'macd', 'macd_signal', 'macd_hist',
