@@ -616,3 +616,163 @@ async def get_model_performance_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve performance details: {str(e)}",
         )
+
+
+class EnsembleAnalysisResponse(BaseModel):
+    """Ensemble analysis response with base models breakdown."""
+
+    ticker: str
+    meta_learner: Dict[str, Any]
+    base_models: List[Dict[str, Any]]
+    current_agreement: Dict[str, Any]
+    ensemble_vs_base: Dict[str, Any]
+    timestamp: str
+
+
+@router.get("/{ticker}/ensemble", response_model=EnsembleAnalysisResponse)
+async def get_ensemble_analysis(
+    ticker: str,
+    model_manager: ModelManager = Depends(get_model_manager),
+) -> EnsembleAnalysisResponse:
+    """
+    Get ensemble model analysis including base models comparison.
+
+    Args:
+        ticker: Ticker symbol
+        model_manager: Model manager instance
+
+    Returns:
+        EnsembleAnalysisResponse with ensemble breakdown
+    """
+    try:
+        ticker = ticker.upper()
+        logger.info(f"Getting ensemble analysis for {ticker}")
+
+        # Get ensemble model
+        try:
+            ensemble_type, ensemble_model = model_manager.get_or_create_model(ticker, "ensemble", "up")
+        except Exception as e:
+            logger.error(f"Failed to get ensemble model: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No ensemble model found for ticker {ticker}",
+            )
+
+        # Check if it's an ensemble model
+        if not hasattr(ensemble_model, 'get_base_model_weights'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model is not an ensemble model",
+            )
+
+        # Get meta learner info
+        weights = ensemble_model.get_base_model_weights()
+        ensemble_stats = ensemble_model.get_ensemble_stats()
+
+        meta_learner = {
+            "type": ensemble_stats.get("meta_learner_type", "LogisticRegression"),
+            "weights": weights,
+            "trained_base_models": ensemble_stats.get("trained_base_models", 0),
+            "total_base_models": ensemble_stats.get("total_base_models", 0)
+        }
+
+        # Get base models performance
+        base_models = []
+        model_types = ["xgboost", "lightgbm", "lstm", "transformer"]
+
+        for model_type in model_types:
+            try:
+                _, base_model = model_manager.get_or_create_model(ticker, model_type, "up")
+
+                if base_model.is_trained:
+                    stats = base_model.get_prediction_stats(hours=50)
+
+                    base_models.append({
+                        "type": model_type,
+                        "accuracy": round(stats['accuracy'], 4),
+                        "precision": round(stats['precision'], 4),
+                        "recall": round(stats['recall'], 4),
+                        "f1_score": round(2 * stats['precision'] * stats['recall'] / (stats['precision'] + stats['recall']) if (stats['precision'] + stats['recall']) > 0 else 0.0, 4),
+                        "total_predictions": stats['total_predictions'],
+                        "is_trained": True
+                    })
+                else:
+                    base_models.append({
+                        "type": model_type,
+                        "accuracy": 0.0,
+                        "precision": 0.0,
+                        "recall": 0.0,
+                        "f1_score": 0.0,
+                        "total_predictions": 0,
+                        "is_trained": False
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to get {model_type} model: {e}")
+                base_models.append({
+                    "type": model_type,
+                    "accuracy": 0.0,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f1_score": 0.0,
+                    "total_predictions": 0,
+                    "is_trained": False
+                })
+
+        # Calculate current agreement (simplified - would need actual prediction data)
+        # For now, use recent accuracy as proxy for agreement
+        ensemble_accuracy = ensemble_model.get_recent_accuracy(hours=50)
+
+        base_predictions = []
+        for model_info in base_models:
+            if model_info['is_trained']:
+                base_predictions.append({
+                    "model": model_info['type'],
+                    "direction": "up",  # Placeholder
+                    "probability": model_info['accuracy'],  # Using accuracy as proxy
+                })
+
+        # Calculate agreement rate
+        if len(base_predictions) > 1:
+            accuracies = [p['probability'] for p in base_predictions]
+            avg_accuracy = sum(accuracies) / len(accuracies)
+            # Agreement based on how close models are to each other
+            variance = sum((acc - avg_accuracy) ** 2 for acc in accuracies) / len(accuracies)
+            agreement_rate = max(0.0, 1.0 - variance)
+        else:
+            agreement_rate = 0.0
+
+        current_agreement = {
+            "ensemble_prediction": {
+                "direction": "up",
+                "probability": ensemble_accuracy
+            },
+            "base_predictions": base_predictions,
+            "agreement_rate": round(agreement_rate, 3),
+            "variance": round(variance if len(base_predictions) > 1 else 0.0, 4)
+        }
+
+        # Compare ensemble vs individual base models
+        ensemble_vs_base = {
+            "ensemble_accuracy": round(ensemble_accuracy, 4),
+            "best_base_accuracy": round(max([m['accuracy'] for m in base_models if m['is_trained']], default=0.0), 4),
+            "avg_base_accuracy": round(sum([m['accuracy'] for m in base_models if m['is_trained']]) / len([m for m in base_models if m['is_trained']]) if any(m['is_trained'] for m in base_models) else 0.0, 4),
+            "improvement": round(ensemble_accuracy - max([m['accuracy'] for m in base_models if m['is_trained']], default=0.0), 4)
+        }
+
+        return EnsembleAnalysisResponse(
+            ticker=ticker,
+            meta_learner=meta_learner,
+            base_models=base_models,
+            current_agreement=current_agreement,
+            ensemble_vs_base=ensemble_vs_base,
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get ensemble analysis for {ticker}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve ensemble analysis: {str(e)}",
+        )

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../services/api'
 import OverviewTab from './OverviewTab'
 import PerformanceTab from './PerformanceTab'
+import EnsembleTab from './EnsembleTab'
 
 export default function ModelDetailModal({ ticker, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
@@ -38,11 +39,25 @@ export default function ModelDetailModal({ ticker, onClose }) {
     staleTime: 60000,
   })
 
-  const isLoading = activeTab === 'overview' ? overviewLoading : performanceLoading
+  // Fetch ensemble data
+  const { data: ensembleData, isLoading: ensembleLoading } = useQuery({
+    queryKey: ['model-ensemble', ticker],
+    queryFn: async () => {
+      const response = await api.get(`/models/${ticker}/ensemble`)
+      return response.data
+    },
+    enabled: !!ticker && activeTab === 'ensemble',
+    staleTime: 60000,
+  })
+
+  const isLoading = activeTab === 'overview' ? overviewLoading :
+                     activeTab === 'performance' ? performanceLoading :
+                     ensembleLoading
 
   const tabs = [
     { id: 'overview', label: '📊 Overview', icon: '📊' },
     { id: 'performance', label: '📈 Performance', icon: '📈' },
+    { id: 'ensemble', label: '🎭 Ensemble', icon: '🎭' },
   ]
 
   return (
@@ -128,6 +143,9 @@ export default function ModelDetailModal({ ticker, onClose }) {
                   )}
                   {activeTab === 'performance' && performanceData && (
                     <PerformanceTab data={performanceData} ticker={ticker} />
+                  )}
+                  {activeTab === 'ensemble' && ensembleData && (
+                    <EnsembleTab data={ensembleData} ticker={ticker} />
                   )}
                 </>
               )}
