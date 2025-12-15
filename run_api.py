@@ -12,12 +12,32 @@ Usage:
 """
 
 import argparse
+import socket
 import sys
 from pathlib import Path
 
 # Add project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+
+
+def is_port_in_use(host: str, port: int) -> bool:
+    """Check if a port is already in use."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host if host != "0.0.0.0" else "127.0.0.1", port))
+            return False
+        except OSError:
+            return True
+
+
+def find_available_port(host: str, start_port: int, max_attempts: int = 10) -> int:
+    """Find an available port starting from start_port."""
+    for i in range(max_attempts):
+        port = start_port + i
+        if not is_port_in_use(host, port):
+            return port
+    return -1
 
 
 def main():
@@ -54,6 +74,12 @@ def main():
         help="Number of worker processes (default: 1)",
     )
 
+    parser.add_argument(
+        "--auto-port",
+        action="store_true",
+        help="Automatically find available port if default is in use",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -63,26 +89,50 @@ def main():
         print("Install dependencies with: pip install -r requirements.txt")
         sys.exit(1)
 
+    # Check port availability
+    port = args.port
+    if is_port_in_use(args.host, port):
+        if args.auto_port:
+            new_port = find_available_port(args.host, port)
+            if new_port == -1:
+                print(f"ERROR: No available ports found starting from {port}")
+                sys.exit(1)
+            print(f"WARNING: Port {port} is in use, using port {new_port} instead")
+            port = new_port
+        else:
+            print("=" * 60)
+            print(f"ERROR: Port {port} is already in use!")
+            print("=" * 60)
+            print()
+            print("Possible solutions:")
+            print(f"  1. Use a different port: python run_api.py --port {port + 1}")
+            print(f"  2. Auto-select port: python run_api.py --auto-port")
+            print(f"  3. Find and stop the process using port {port}:")
+            print(f"     - Windows: netstat -ano | findstr :{port}")
+            print(f"     - Linux/Mac: lsof -i :{port}")
+            print()
+            sys.exit(1)
+
     print("=" * 60)
     print("NASDAQ Prediction API")
     print("=" * 60)
     print(f"Host: {args.host}")
-    print(f"Port: {args.port}")
+    print(f"Port: {port}")
     print(f"Reload: {args.reload}")
     print(f"Workers: {args.workers}")
     print(f"Log Level: {args.log_level}")
     print("=" * 60)
     print()
     print("Starting server...")
-    print(f"API docs: http://{args.host}:{args.port}/docs")
-    print(f"WebSocket: ws://{args.host}:{args.port}/ws")
+    print(f"API docs: http://{args.host}:{port}/docs")
+    print(f"WebSocket: ws://{args.host}:{port}/ws")
     print()
 
     # Run the server
     uvicorn.run(
         "src.api.main:app",
         host=args.host,
-        port=args.port,
+        port=port,
         reload=args.reload,
         log_level=args.log_level,
         workers=args.workers if not args.reload else 1,  # Can't use workers with reload

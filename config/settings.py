@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # API Settings
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
+    DEBUG: bool = False  # Enable debug mode for detailed error messages
+
+    # CORS Settings - add production domains here
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",  # Vite default dev server
+        "http://localhost:3000",  # Common React dev server
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",  # Alternative dev server
+        "http://127.0.0.1:8080",
+    ]
 
     # Trading Settings
     COMMISSION_PERCENT: float = 0.1  # One-way commission

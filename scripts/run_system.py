@@ -233,18 +233,18 @@ def initialize_model_manager() -> ModelManager:
 def print_startup_banner() -> None:
     """Print startup banner."""
     banner = """
-╔════════════════════════════════════════════════════════════════════════════╗
-║                                                                            ║
-║           NASDAQ PREDICTION SYSTEM - AUTOMATED TRADING ENGINE             ║
-║                                                                            ║
-║  Features:                                                                 ║
-║    • Real-time data collection (1-minute bars)                            ║
-║    • Multi-model predictions (XGBoost, LightGBM, LSTM, Transformer)       ║
-║    • Automated training & model selection                                 ║
-║    • REST API & WebSocket streaming                                       ║
-║    • GPU-accelerated inference                                            ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+================================================================================
+
+           NASDAQ PREDICTION SYSTEM - AUTOMATED TRADING ENGINE
+
+  Features:
+    - Real-time data collection (1-minute bars)
+    - Multi-model predictions (XGBoost, LightGBM, LSTM, Transformer)
+    - Automated training & model selection
+    - REST API & WebSocket streaming
+    - GPU-accelerated inference
+
+================================================================================
     """
     print(banner)
 

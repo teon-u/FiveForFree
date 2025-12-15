@@ -10,6 +10,12 @@ from .database import (
     ModelPerformance,
 )
 from .logger import get_logger
+from .market_hours import (
+    is_market_open,
+    is_trading_day,
+    get_market_status,
+    suppress_yfinance_warnings,
+)
 
 __all__ = [
     "get_db",
@@ -20,4 +26,8 @@ __all__ = [
     "Trade",
     "ModelPerformance",
     "get_logger",
+    "is_market_open",
+    "is_trading_day",
+    "get_market_status",
+    "suppress_yfinance_warnings",
 ]

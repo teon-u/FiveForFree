@@ -26,7 +26,11 @@ from src.api.dependencies import (
     get_realtime_predictor,
     get_settings,
 )
+from src.utils.market_hours import suppress_yfinance_warnings
 from config.settings import settings
+
+# Suppress verbose yfinance warnings at module load
+suppress_yfinance_warnings()
 
 
 # Background tasks
@@ -114,15 +118,10 @@ app = FastAPI(
 )
 
 
-# Configure CORS
+# Configure CORS from settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite default dev server
-        "http://localhost:3000",  # Common React dev server
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -212,14 +211,23 @@ async def not_found_handler(request, exc):
 @app.exception_handler(500)
 async def internal_error_handler(request, exc):
     """Handle 500 Internal Server errors."""
+    import traceback
+
     logger.error(f"Internal server error: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal Server Error",
-            "message": "An unexpected error occurred",
-        },
-    )
+
+    content = {
+        "error": "Internal Server Error",
+        "message": "An unexpected error occurred",
+    }
+
+    # Include detailed error info in debug mode
+    if settings.DEBUG:
+        content["detail"] = str(exc)
+        content["traceback"] = traceback.format_exc()
+        content["path"] = str(request.url)
+        content["method"] = request.method
+
+    return JSONResponse(status_code=500, content=content)
 
 
 # Run with: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
