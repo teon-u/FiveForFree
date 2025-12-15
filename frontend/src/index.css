@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white antialiased;
+  }
+}
+
+@layer components {
+  /* Card styles */
+  .ticker-card {
+    @apply relative bg-surface rounded-lg p-4 cursor-pointer transition-all duration-200;
+    @apply hover:scale-105 hover:shadow-xl;
+  }
+
+  .ticker-card.strong-up {
+    @apply border-2 border-strong-up shadow-lg shadow-strong-up/20;
+  }
+
+  .ticker-card.up {
+    @apply border-2 border-up shadow-lg shadow-up/20;
+  }
+
+  .ticker-card.strong-down {
+    @apply border-2 border-strong-down shadow-lg shadow-strong-down/20;
+  }
+
+  .ticker-card.down {
+    @apply border-2 border-down shadow-lg shadow-down/20;
+  }
+
+  .ticker-card.neutral {
+    @apply border border-neutral/30;
+  }
+
+  /* Probability badge */
+  .prob-badge {
+    @apply px-3 py-1 rounded-full text-sm font-bold;
+  }
+
+  .prob-badge.strong-up {
+    @apply bg-strong-up/20 text-strong-up;
+  }
+
+  .prob-badge.up {
+    @apply bg-up/20 text-up;
+  }
+
+  .prob-badge.strong-down {
+    @apply bg-strong-down/20 text-strong-down;
+  }
+
+  .prob-badge.down {
+    @apply bg-down/20 text-down;
+  }
+
+  .prob-badge.neutral {
+    @apply bg-neutral/20 text-neutral;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin h-8 w-8 border-4 border-gray-600 border-t-blue-500 rounded-full;
+  }
+
+  /* Scrollbar styling */
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply h-2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-surface-light rounded;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-600 rounded hover:bg-slate-500;
+  }
+
+  /* Modal backdrop */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-40;
+  }
+
+  /* Modal content */
+  .modal-content {
+    @apply fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2;
+    @apply bg-surface rounded-xl border border-surface-light shadow-2xl z-50;
+    @apply max-w-4xl w-full max-h-[90vh] overflow-y-auto;
+  }
+
+  /* Table styles */
+  .model-table {
+    @apply w-full border-collapse;
+  }
+
+  .model-table th {
+    @apply bg-surface-light text-left px-4 py-3 text-sm font-semibold text-gray-300;
+  }
+
+  .model-table td {
+    @apply px-4 py-3 border-t border-surface-light;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-2 rounded-full overflow-hidden bg-surface-light;
+  }
+
+  .progress-fill {
+    @apply h-full transition-all duration-300;
+  }
+}
+
+/* Custom animations */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.loading-shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    to right,
+    #1e293b 0%,
+    #334155 20%,
+    #1e293b 40%,
+    #1e293b 100%
+  );
+  background-size: 1000px 100%;
+}
