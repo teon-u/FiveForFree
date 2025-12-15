@@ -5,6 +5,10 @@ Generates binary labels for up/down predictions based on:
 - 5% threshold for significant price movement
 - 60-minute prediction horizon
 - Tracks maximum gain/loss for analysis
+
+Hybrid-Ensemble Approach (Structure B):
+- Volatility label: 1 if ±5% movement occurs within horizon
+- Direction label: 1 if upward (given volatility), 0 if downward
 """
 
 from datetime import datetime, timedelta
@@ -21,9 +25,14 @@ class LabelGenerator:
     """
     Generate training labels for NASDAQ prediction models.
 
-    Labels:
+    Structure A (Direct Prediction):
     - label_up: 1 if price reaches +5% within 60 minutes, else 0
     - label_down: 1 if price reaches -5% within 60 minutes, else 0
+
+    Structure B (Hybrid-Ensemble):
+    - label_volatility: 1 if price reaches ±5% within 60 minutes, else 0
+    - label_direction: 1 if upward movement comes first (given volatility), else 0
+      (only meaningful when label_volatility=1)
 
     Both labels can be 1 simultaneously (high volatility scenario).
     """
@@ -123,9 +132,36 @@ class LabelGenerator:
             exit_price_down = None
             minutes_to_target_down = None
 
+        # Structure B: Volatility and Direction labels
+        label_volatility = 1 if (label_up == 1 or label_down == 1) else 0
+
+        # Direction: which target was hit first (1=up, 0=down)
+        # If both hit, use the one that hit first; if neither, default to 0.5 (neutral)
+        if label_volatility == 1:
+            if minutes_to_target_up is not None and minutes_to_target_down is not None:
+                # Both hit - which came first?
+                label_direction = 1 if minutes_to_target_up <= minutes_to_target_down else 0
+            elif minutes_to_target_up is not None:
+                label_direction = 1  # Only up hit
+            else:
+                label_direction = 0  # Only down hit
+        else:
+            # No volatility - use bias based on which was closer to target
+            if max_gain > abs(max_loss):
+                label_direction = 1
+            elif abs(max_loss) > max_gain:
+                label_direction = 0
+            else:
+                label_direction = 1  # Neutral case, default to up
+
         return {
+            # Structure A labels
             'label_up': label_up,
             'label_down': label_down,
+            # Structure B labels
+            'label_volatility': label_volatility,
+            'label_direction': label_direction,
+            # Metadata
             'max_gain': max_gain,
             'max_loss': max_loss,
             'exit_price_up': exit_price_up,
@@ -202,14 +238,21 @@ class LabelGenerator:
         # Sort by timestamp
         df = df.sort_values('timestamp').reset_index(drop=True)
 
-        # Initialize label columns
+        # Initialize label columns (Structure A)
         df['label_up'] = 0
         df['label_down'] = 0
         df['max_gain'] = 0.0
         df['max_loss'] = 0.0
 
+        # Initialize label columns (Structure B)
+        df['label_volatility'] = 0
+        df['label_direction'] = 0
+        df['minutes_to_up'] = np.nan
+        df['minutes_to_down'] = np.nan
+
         # Calculate rolling maximum high and minimum low for next N minutes
         horizon = self.prediction_horizon_minutes
+        commission_total = self.commission_pct * 2
 
         # Use rolling window with reverse indexing
         for i in range(len(df) - horizon):
@@ -230,23 +273,68 @@ class LabelGenerator:
             max_loss = ((min_low - entry_price) / entry_price) * 100
 
             # Adjust for commission
-            commission_total = self.commission_pct * 2
             max_gain_net = max_gain - commission_total
             max_loss_net = max_loss + commission_total
 
-            # Set labels
-            df.loc[i, 'label_up'] = 1 if max_gain_net >= self.target_percent else 0
-            df.loc[i, 'label_down'] = 1 if max_loss_net <= -self.target_percent else 0
+            # Structure A: Direct labels
+            label_up = 1 if max_gain_net >= self.target_percent else 0
+            label_down = 1 if max_loss_net <= -self.target_percent else 0
+
+            df.loc[i, 'label_up'] = label_up
+            df.loc[i, 'label_down'] = label_down
             df.loc[i, 'max_gain'] = max_gain_net
             df.loc[i, 'max_loss'] = max_loss_net
+
+            # Structure B: Volatility label
+            label_volatility = 1 if (label_up == 1 or label_down == 1) else 0
+            df.loc[i, 'label_volatility'] = label_volatility
+
+            # Find time to targets for direction determination
+            minutes_to_up = None
+            minutes_to_down = None
+
+            if label_up == 1:
+                # Find first bar where gain exceeds target
+                gains = ((df.loc[i+1:i+horizon, 'high'].values - entry_price) / entry_price) * 100 - commission_total
+                up_indices = np.where(gains >= self.target_percent)[0]
+                if len(up_indices) > 0:
+                    minutes_to_up = up_indices[0] + 1
+                    df.loc[i, 'minutes_to_up'] = minutes_to_up
+
+            if label_down == 1:
+                # Find first bar where loss exceeds target
+                losses = ((df.loc[i+1:i+horizon, 'low'].values - entry_price) / entry_price) * 100 + commission_total
+                down_indices = np.where(losses <= -self.target_percent)[0]
+                if len(down_indices) > 0:
+                    minutes_to_down = down_indices[0] + 1
+                    df.loc[i, 'minutes_to_down'] = minutes_to_down
+
+            # Structure B: Direction label
+            if label_volatility == 1:
+                if minutes_to_up is not None and minutes_to_down is not None:
+                    label_direction = 1 if minutes_to_up <= minutes_to_down else 0
+                elif minutes_to_up is not None:
+                    label_direction = 1
+                else:
+                    label_direction = 0
+            else:
+                # No volatility - use bias based on which was closer
+                label_direction = 1 if max_gain_net > abs(max_loss_net) else 0
+
+            df.loc[i, 'label_direction'] = label_direction
 
         return df
 
     def _create_default_labels(self) -> Dict[str, float]:
         """Create default labels when no future data is available."""
         return {
+            # Structure A labels
             'label_up': 0,
             'label_down': 0,
+            # Structure B labels
+            'label_volatility': 0,
+            'label_direction': 0,
+            # Metadata
             'max_gain': 0.0,
             'max_loss': 0.0,
             'exit_price_up': None,
@@ -265,27 +353,49 @@ class LabelGenerator:
             labels_df: DataFrame with label columns
 
         Returns:
-            Dictionary with statistics
+            Dictionary with statistics for both Structure A and Structure B
         """
         total = len(labels_df)
 
         if total == 0:
             return {
                 'total_samples': 0,
+                # Structure A stats
                 'up_rate': 0.0,
                 'down_rate': 0.0,
                 'both_rate': 0.0,
                 'neither_rate': 0.0,
+                # Structure B stats
+                'volatility_rate': 0.0,
+                'direction_up_rate': 0.0,
+                'direction_down_rate': 0.0,
+                # Other stats
                 'avg_max_gain': 0.0,
                 'avg_max_loss': 0.0,
                 'avg_time_to_target_up': 0.0,
                 'avg_time_to_target_down': 0.0
             }
 
+        # Structure A statistics
         up_count = labels_df['label_up'].sum()
         down_count = labels_df['label_down'].sum()
         both_count = ((labels_df['label_up'] == 1) & (labels_df['label_down'] == 1)).sum()
         neither_count = ((labels_df['label_up'] == 0) & (labels_df['label_down'] == 0)).sum()
+
+        # Structure B statistics
+        volatility_count = 0
+        direction_up_count = 0
+        direction_down_count = 0
+
+        if 'label_volatility' in labels_df.columns:
+            volatility_count = labels_df['label_volatility'].sum()
+
+        if 'label_direction' in labels_df.columns and 'label_volatility' in labels_df.columns:
+            # Direction stats only for volatile samples
+            volatile_samples = labels_df[labels_df['label_volatility'] == 1]
+            if len(volatile_samples) > 0:
+                direction_up_count = volatile_samples['label_direction'].sum()
+                direction_down_count = len(volatile_samples) - direction_up_count
 
         # Calculate averages
         avg_max_gain = labels_df['max_gain'].mean()
@@ -301,6 +411,7 @@ class LabelGenerator:
 
         return {
             'total_samples': total,
+            # Structure A stats
             'up_count': int(up_count),
             'down_count': int(down_count),
             'both_count': int(both_count),
@@ -309,6 +420,14 @@ class LabelGenerator:
             'down_rate': float(down_count / total),
             'both_rate': float(both_count / total),
             'neither_rate': float(neither_count / total),
+            # Structure B stats
+            'volatility_count': int(volatility_count),
+            'volatility_rate': float(volatility_count / total) if total > 0 else 0.0,
+            'direction_up_count': int(direction_up_count),
+            'direction_down_count': int(direction_down_count),
+            'direction_up_rate': float(direction_up_count / volatility_count) if volatility_count > 0 else 0.0,
+            'direction_down_rate': float(direction_down_count / volatility_count) if volatility_count > 0 else 0.0,
+            # Other stats
             'avg_max_gain': float(avg_max_gain),
             'avg_max_loss': float(avg_max_loss),
             'avg_time_to_target_up': float(avg_time_up) if not np.isnan(avg_time_up) else 0.0,
