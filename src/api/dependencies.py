@@ -69,14 +69,15 @@ def init_dependencies():
         # Initialize database
         init_db()
 
-        # Initialize model manager
+        # Initialize model manager and load trained models
         _model_manager = ModelManager()
-        logger.info("ModelManager initialized")
+        loaded_count = _model_manager.load_all_models()
+        logger.info(f"ModelManager initialized - loaded {loaded_count} models")
 
-        # Initialize data collectors (with API key from settings)
+        # Initialize data collectors
         try:
-            _minute_bar_collector = MinuteBarCollector(api_key=settings.POLYGON_API_KEY)
-            logger.info("MinuteBarCollector initialized")
+            _minute_bar_collector = MinuteBarCollector(use_db=True)
+            logger.info("MinuteBarCollector initialized (using database)")
         except Exception as e:
             logger.warning(f"Failed to initialize MinuteBarCollector: {e}")
 
