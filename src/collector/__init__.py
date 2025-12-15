@@ -1,8 +1,8 @@
-"""Data collection modules for Polygon.io API."""
+"""Data collection modules for Finnhub API."""
 
-from src.collector.polygon_client import (
-    PolygonClientWrapper,
-    get_polygon_client,
+from src.collector.finnhub_client import (
+    FinnhubClientWrapper,
+    get_finnhub_client,
     RateLimitError
 )
 from src.collector.ticker_selector import (
@@ -14,10 +14,7 @@ from src.collector.minute_bars import (
     MinuteBar
 )
 from src.collector.quotes import (
-    QuoteCollector,
-    OrderBookSnapshot,
-    OrderBookLevel,
-    Quote
+    QuoteCollector
 )
 from src.collector.market_context import (
     MarketContextCollector,
@@ -28,9 +25,9 @@ from src.collector.market_context import (
 )
 
 __all__ = [
-    # Polygon client
-    'PolygonClientWrapper',
-    'get_polygon_client',
+    # Finnhub client
+    'FinnhubClientWrapper',
+    'get_finnhub_client',
     'RateLimitError',
 
     # Ticker selection
@@ -41,11 +38,8 @@ __all__ = [
     'MinuteBarCollector',
     'MinuteBar',
 
-    # Quotes and order book
+    # Quotes
     'QuoteCollector',
-    'OrderBookSnapshot',
-    'OrderBookLevel',
-    'Quote',
 
     # Market context
     'MarketContextCollector',
