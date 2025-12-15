@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)"
+      "Bash(python scripts/init_database.py:*)",
+      "Bash(python scripts/collect_historical.py:*)",
+      "Bash(python scripts/train_all_models.py:*)",
+      "Bash(python scripts/run_system.py:*)",
+      "Bash(python -c:*)",
+      "Bash(timeout 10 python:*)",
+      "Bash(nvidia-smi)",
+      "Bash(pip uninstall:*)"
     ],
     "deny": [],
     "ask": []

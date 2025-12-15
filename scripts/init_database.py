@@ -27,7 +27,6 @@ from sqlalchemy import inspect, text
 from config.settings import settings
 from src.utils.database import (
     init_db,
-    engine,
     Base,
     Ticker,
     MinuteBar,
@@ -35,6 +34,7 @@ from src.utils.database import (
     Trade,
     ModelPerformance,
 )
+import src.utils.database as db_module
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -61,7 +61,7 @@ def check_database_exists() -> bool:
         True if tables exist, False otherwise
     """
     try:
-        inspector = inspect(engine)
+        inspector = inspect(db_module.engine)
         existing_tables = inspector.get_table_names()
         required_tables = {
             "tickers",
@@ -87,7 +87,7 @@ def drop_all_tables() -> None:
     logger.warning("Dropping all existing tables...")
 
     try:
-        Base.metadata.drop_all(bind=engine)
+        Base.metadata.drop_all(bind=db_module.engine)
         logger.info("All tables dropped successfully")
     except Exception as e:
         logger.error(f"Failed to drop tables: {e}")
@@ -99,7 +99,7 @@ def create_all_tables() -> None:
     logger.info("Creating database tables...")
 
     try:
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=db_module.engine)
         logger.info("All tables created successfully")
     except Exception as e:
         logger.error(f"Failed to create tables: {e}")
@@ -114,7 +114,7 @@ def verify_tables() -> bool:
         True if all tables exist, False otherwise
     """
     try:
-        inspector = inspect(engine)
+        inspector = inspect(db_module.engine)
         existing_tables = set(inspector.get_table_names())
         required_tables = {
             "tickers",

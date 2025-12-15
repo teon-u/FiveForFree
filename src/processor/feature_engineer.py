@@ -17,9 +17,165 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import talib
+
+# Try to import talib, fallback to pandas implementation if not available
+try:
+    import talib
+    HAS_TALIB = True
+except ImportError:
+    HAS_TALIB = False
 
 warnings.filterwarnings('ignore')
+
+
+# Fallback implementations for TA-Lib functions using pandas
+def _sma(series: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Simple Moving Average."""
+    if HAS_TALIB:
+        return talib.SMA(series, timeperiod=timeperiod)
+    return pd.Series(series).rolling(window=timeperiod).mean().values
+
+
+def _atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Average True Range."""
+    if HAS_TALIB:
+        return talib.ATR(high, low, close, timeperiod=timeperiod)
+
+    high_s = pd.Series(high)
+    low_s = pd.Series(low)
+    close_s = pd.Series(close)
+
+    tr1 = high_s - low_s
+    tr2 = abs(high_s - close_s.shift(1))
+    tr3 = abs(low_s - close_s.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    return tr.rolling(window=timeperiod).mean().values
+
+
+def _bbands(close: np.ndarray, timeperiod: int, nbdevup: float, nbdevdn: float):
+    """Bollinger Bands."""
+    if HAS_TALIB:
+        return talib.BBANDS(close, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn)
+
+    close_s = pd.Series(close)
+    middle = close_s.rolling(window=timeperiod).mean()
+    std = close_s.rolling(window=timeperiod).std()
+    upper = middle + nbdevup * std
+    lower = middle - nbdevdn * std
+
+    return upper.values, middle.values, lower.values
+
+
+def _obv(close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+    """On-Balance Volume."""
+    if HAS_TALIB:
+        return talib.OBV(close, volume)
+
+    close_s = pd.Series(close)
+    volume_s = pd.Series(volume)
+
+    direction = np.where(close_s.diff() > 0, 1, np.where(close_s.diff() < 0, -1, 0))
+    return (direction * volume_s).cumsum().values
+
+
+def _mfi(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Money Flow Index."""
+    if HAS_TALIB:
+        return talib.MFI(high, low, close, volume, timeperiod=timeperiod)
+
+    typical_price = (pd.Series(high) + pd.Series(low) + pd.Series(close)) / 3
+    money_flow = typical_price * pd.Series(volume)
+
+    tp_diff = typical_price.diff()
+    positive_flow = money_flow.where(tp_diff > 0, 0).rolling(window=timeperiod).sum()
+    negative_flow = money_flow.where(tp_diff < 0, 0).abs().rolling(window=timeperiod).sum()
+
+    mfi = 100 - (100 / (1 + positive_flow / (negative_flow + 1e-10)))
+    return mfi.values
+
+
+def _rsi(close: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Relative Strength Index."""
+    if HAS_TALIB:
+        return talib.RSI(close, timeperiod=timeperiod)
+
+    close_s = pd.Series(close)
+    delta = close_s.diff()
+
+    gain = delta.where(delta > 0, 0).rolling(window=timeperiod).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=timeperiod).mean()
+
+    rs = gain / (loss + 1e-10)
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi.values
+
+
+def _macd(close: np.ndarray, fastperiod: int, slowperiod: int, signalperiod: int):
+    """Moving Average Convergence Divergence."""
+    if HAS_TALIB:
+        return talib.MACD(close, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+
+    close_s = pd.Series(close)
+    ema_fast = close_s.ewm(span=fastperiod, adjust=False).mean()
+    ema_slow = close_s.ewm(span=slowperiod, adjust=False).mean()
+
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signalperiod, adjust=False).mean()
+    histogram = macd_line - signal_line
+
+    return macd_line.values, signal_line.values, histogram.values
+
+
+def _stoch(high: np.ndarray, low: np.ndarray, close: np.ndarray,
+           fastk_period: int, slowk_period: int, slowd_period: int):
+    """Stochastic Oscillator."""
+    if HAS_TALIB:
+        return talib.STOCH(high, low, close, fastk_period=fastk_period,
+                          slowk_period=slowk_period, slowd_period=slowd_period)
+
+    high_s = pd.Series(high)
+    low_s = pd.Series(low)
+    close_s = pd.Series(close)
+
+    lowest_low = low_s.rolling(window=fastk_period).min()
+    highest_high = high_s.rolling(window=fastk_period).max()
+
+    fastk = 100 * (close_s - lowest_low) / (highest_high - lowest_low + 1e-10)
+    slowk = fastk.rolling(window=slowk_period).mean()
+    slowd = slowk.rolling(window=slowd_period).mean()
+
+    return slowk.values, slowd.values
+
+
+def _willr(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Williams %R."""
+    if HAS_TALIB:
+        return talib.WILLR(high, low, close, timeperiod=timeperiod)
+
+    high_s = pd.Series(high)
+    low_s = pd.Series(low)
+    close_s = pd.Series(close)
+
+    highest_high = high_s.rolling(window=timeperiod).max()
+    lowest_low = low_s.rolling(window=timeperiod).min()
+
+    willr = -100 * (highest_high - close_s) / (highest_high - lowest_low + 1e-10)
+    return willr.values
+
+
+def _cci(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int) -> np.ndarray:
+    """Commodity Channel Index."""
+    if HAS_TALIB:
+        return talib.CCI(high, low, close, timeperiod=timeperiod)
+
+    typical_price = (pd.Series(high) + pd.Series(low) + pd.Series(close)) / 3
+    sma_tp = typical_price.rolling(window=timeperiod).mean()
+    mean_deviation = typical_price.rolling(window=timeperiod).apply(lambda x: np.abs(x - x.mean()).mean())
+
+    cci = (typical_price - sma_tp) / (0.015 * mean_deviation + 1e-10)
+    return cci.values
 
 
 class FeatureEngineer:
@@ -142,9 +298,9 @@ class FeatureEngineer:
         df['returns_60m'] = df['close'].pct_change(60)
 
         # 6-8: Moving averages
-        df['ma_5'] = talib.SMA(close, timeperiod=5)
-        df['ma_15'] = talib.SMA(close, timeperiod=15)
-        df['ma_60'] = talib.SMA(close, timeperiod=60)
+        df['ma_5'] = _sma(close, timeperiod=5)
+        df['ma_15'] = _sma(close, timeperiod=15)
+        df['ma_60'] = _sma(close, timeperiod=60)
 
         # 9-11: Price vs moving averages (normalized)
         df['price_vs_ma_5'] = (df['close'] - df['ma_5']) / df['ma_5']
@@ -187,11 +343,11 @@ class FeatureEngineer:
         close = df['close'].values
 
         # 1: Average True Range
-        df['atr_14'] = talib.ATR(high, low, close, timeperiod=14)
+        df['atr_14'] = _atr(high, low, close, timeperiod=14)
         df['atr_14_normalized'] = df['atr_14'] / df['close']
 
         # 2-3: Bollinger Bands
-        upper, middle, lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
+        upper, middle, lower = _bbands(close, timeperiod=20, nbdevup=2, nbdevdn=2)
         df['bb_upper'] = upper
         df['bb_middle'] = middle
         df['bb_lower'] = lower
@@ -239,18 +395,18 @@ class FeatureEngineer:
         low = df['low'].values
 
         # 1: Volume ratio (current vs average)
-        df['volume_ma_20'] = talib.SMA(volume, timeperiod=20)
+        df['volume_ma_20'] = _sma(volume, timeperiod=20)
         df['volume_ratio'] = df['volume'] / (df['volume_ma_20'] + 1e-10)
 
         # 2-3: Volume moving averages
-        df['volume_ma_5'] = talib.SMA(volume, timeperiod=5)
-        df['volume_ma_15'] = talib.SMA(volume, timeperiod=15)
+        df['volume_ma_5'] = _sma(volume, timeperiod=5)
+        df['volume_ma_15'] = _sma(volume, timeperiod=15)
 
         # 4: Volume trend
         df['volume_trend'] = (df['volume_ma_5'] - df['volume_ma_15']) / (df['volume_ma_15'] + 1e-10)
 
         # 5: On-Balance Volume
-        df['obv'] = talib.OBV(close, volume)
+        df['obv'] = _obv(close, volume)
         df['obv_normalized'] = df['obv'] / df['obv'].rolling(60).mean()
 
         # 6: Money flow (price * volume)
@@ -258,7 +414,7 @@ class FeatureEngineer:
         df['money_flow_ratio'] = df['money_flow'] / df['money_flow'].rolling(20).mean()
 
         # 7: Money Flow Index
-        df['mfi_14'] = talib.MFI(high, low, close, volume, timeperiod=14)
+        df['mfi_14'] = _mfi(high, low, close, volume, timeperiod=14)
 
         # 8: Volume Price Trend
         df['volume_price_trend'] = (df['close'].diff() / df['close'].shift(1)) * df['volume']
@@ -358,24 +514,24 @@ class FeatureEngineer:
         low = df['low'].values
 
         # 1: RSI (Relative Strength Index)
-        df['rsi_14'] = talib.RSI(close, timeperiod=14)
+        df['rsi_14'] = _rsi(close, timeperiod=14)
 
         # 2-4: MACD
-        macd, macd_signal, macd_hist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
+        macd, macd_signal, macd_hist = _macd(close, fastperiod=12, slowperiod=26, signalperiod=9)
         df['macd'] = macd
         df['macd_signal'] = macd_signal
         df['macd_hist'] = macd_hist
 
         # 5-6: Stochastic Oscillator
-        stoch_k, stoch_d = talib.STOCH(high, low, close, fastk_period=14, slowk_period=3, slowd_period=3)
+        stoch_k, stoch_d = _stoch(high, low, close, fastk_period=14, slowk_period=3, slowd_period=3)
         df['stoch_k'] = stoch_k
         df['stoch_d'] = stoch_d
 
         # 7: Williams %R
-        df['williams_r'] = talib.WILLR(high, low, close, timeperiod=14)
+        df['williams_r'] = _willr(high, low, close, timeperiod=14)
 
         # 8: Commodity Channel Index
-        df['cci_14'] = talib.CCI(high, low, close, timeperiod=14)
+        df['cci_14'] = _cci(high, low, close, timeperiod=14)
 
         return df
 

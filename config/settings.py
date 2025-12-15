@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Prediction Settings
     PREDICTION_HORIZON_MINUTES: int = 60
-    TARGET_PERCENT: float = 5.0
+    TARGET_PERCENT: float = 1.0
     PROBABILITY_THRESHOLD: float = 0.70
 
     # Backtesting
