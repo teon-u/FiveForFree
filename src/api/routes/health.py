@@ -1,13 +1,14 @@
 """Health check endpoints."""
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import get_model_manager, get_settings
 from src.models.model_manager import ModelManager
+from src.utils.market_hours import get_market_status
 from config.settings import Settings
 
 
@@ -15,6 +16,17 @@ router = APIRouter(
     prefix="/api/health",
     tags=["health"],
 )
+
+
+class MarketStatus(BaseModel):
+    """Market status model."""
+
+    is_open: bool = Field(..., description="Whether market is currently open")
+    is_trading_day: bool = Field(..., description="Whether today is a trading day")
+    current_time_et: str = Field(..., description="Current time in ET")
+    market_open: str = Field(..., description="Market open time")
+    market_close: str = Field(..., description="Market close time")
+    reason: Optional[str] = Field(None, description="Reason if market is closed")
 
 
 class HealthResponse(BaseModel):
@@ -25,6 +37,7 @@ class HealthResponse(BaseModel):
     version: str = Field(default="1.0.0", description="API version")
     database: str = Field(..., description="Database status")
     models: Dict[str, Any] = Field(..., description="Model manager status")
+    market: MarketStatus = Field(..., description="Market status")
 
 
 @router.get("", response_model=HealthResponse)
@@ -44,6 +57,9 @@ async def health_check(
     # Get model manager summary
     model_summary = model_manager.get_summary()
 
+    # Get market status
+    market_status = get_market_status()
+
     return HealthResponse(
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
@@ -54,6 +70,7 @@ async def health_check(
             "total_models": model_summary["total_models"],
             "trained_models": model_summary["trained_models"],
         },
+        market=MarketStatus(**market_status),
     )
 
 

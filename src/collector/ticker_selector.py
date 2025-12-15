@@ -21,6 +21,7 @@ class TickerMetrics:
         price: Current price
         prev_close: Previous close price
         market_cap: Market capitalization
+        company_name: Company name (short name)
         category: 'volume' or 'gainer'
     """
     ticker: str
@@ -29,6 +30,7 @@ class TickerMetrics:
     price: float
     prev_close: float
     market_cap: Optional[float] = None
+    company_name: Optional[str] = None
     category: str = 'volume'  # 'volume' or 'gainer'
 
 
@@ -111,6 +113,9 @@ class TickerSelector:
             prev_close = info.get('previousClose') or info.get('regularMarketPreviousClose')
             market_cap = info.get('marketCap')
 
+            # Get company name
+            company_name = info.get('shortName') or info.get('longName')
+
             if not price or not prev_close:
                 return None
 
@@ -123,7 +128,8 @@ class TickerSelector:
                 change_percent=change_pct,
                 price=price,
                 prev_close=prev_close,
-                market_cap=market_cap
+                market_cap=market_cap,
+                company_name=company_name,
             )
 
         except Exception as e:

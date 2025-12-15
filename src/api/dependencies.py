@@ -13,7 +13,8 @@ from src.predictor.realtime_predictor import RealtimePredictor
 from src.collector.minute_bars import MinuteBarCollector
 from src.collector.quotes import QuoteCollector
 from src.collector.market_context import MarketContextCollector
-from src.utils.database import SessionLocal, init_db
+from src.utils import database
+from src.utils.database import init_db
 from config.settings import settings
 
 
@@ -28,10 +29,10 @@ def get_db() -> Generator[Session, None, None]:
     Raises:
         HTTPException: If database connection fails
     """
-    if SessionLocal is None:
+    if database.SessionLocal is None:
         init_db()
 
-    db = SessionLocal()
+    db = database.SessionLocal()
     try:
         yield db
         db.commit()

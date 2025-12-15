@@ -65,7 +65,7 @@ def setup_logging(verbose: bool = False) -> None:
 
 def get_target_tickers(
     custom_tickers: Optional[List[str]] = None,
-) -> List[str]:
+) -> tuple[List[str], dict]:
     """
     Get list of tickers to collect data for.
 
@@ -73,19 +73,33 @@ def get_target_tickers(
         custom_tickers: Optional list of specific tickers
 
     Returns:
-        List of ticker symbols
+        Tuple of (List of ticker symbols, dict of ticker info with company names)
     """
+    ticker_info = {}
+
     if custom_tickers:
         logger.info(f"Using custom ticker list: {custom_tickers}")
-        return custom_tickers
+        return custom_tickers, ticker_info
 
-    # Use ticker selector to get top tickers
+    # Use ticker selector to get top tickers with company info
     logger.info("Selecting target tickers based on volume and gainers...")
     selector = TickerSelector()
-    tickers = selector.get_target_tickers()
+    categories = selector.get_both_categories()
 
+    # Extract unique tickers and their info
+    all_tickers = set()
+    for metrics_list in categories.values():
+        for m in metrics_list:
+            all_tickers.add(m.ticker)
+            if m.ticker not in ticker_info:
+                ticker_info[m.ticker] = {
+                    'name': m.company_name,
+                    'market_cap': m.market_cap,
+                }
+
+    tickers = list(all_tickers)
     logger.info(f"Selected {len(tickers)} target tickers")
-    return tickers
+    return tickers, ticker_info
 
 
 def get_existing_data_range(ticker: str) -> Optional[tuple]:
@@ -122,6 +136,7 @@ def collect_ticker_data(
     days: int,
     collector: MinuteBarCollector,
     update_mode: bool = False,
+    ticker_info: Optional[dict] = None,
 ) -> dict:
     """
     Collect historical data for a single ticker.
@@ -137,6 +152,7 @@ def collect_ticker_data(
         days: Number of days to collect
         collector: MinuteBarCollector instance
         update_mode: If True, only collect missing data
+        ticker_info: Optional dict with 'name' and 'market_cap' for the ticker
 
     Returns:
         Dictionary with collection statistics
@@ -150,6 +166,20 @@ def collect_ticker_data(
     }
 
     try:
+        # Create or update ticker with company name if provided
+        if ticker_info:
+            with get_db() as db:
+                ticker_obj = get_or_create_ticker(
+                    db, ticker,
+                    name=ticker_info.get('name'),
+                    market_cap=ticker_info.get('market_cap'),
+                )
+                # Update name if it was missing
+                if ticker_obj.name is None and ticker_info.get('name'):
+                    ticker_obj.name = ticker_info.get('name')
+                if ticker_obj.market_cap is None and ticker_info.get('market_cap'):
+                    ticker_obj.market_cap = ticker_info.get('market_cap')
+
         # Determine date range
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
@@ -264,8 +294,8 @@ def main() -> int:
     logger.info("")
 
     try:
-        # Get target tickers
-        tickers = get_target_tickers(args.tickers)
+        # Get target tickers with company info
+        tickers, ticker_info_map = get_target_tickers(args.tickers)
 
         if not tickers:
             logger.error("No tickers to process")
@@ -294,11 +324,15 @@ def main() -> int:
         for i, ticker in enumerate(tickers, 1):
             logger.info(f"\n[{i}/{len(tickers)}] Processing {ticker}...")
 
+            # Get ticker info (company name, market cap) if available
+            info = ticker_info_map.get(ticker)
+
             stats = collect_ticker_data(
                 ticker,
                 args.days,
                 collector,
                 update_mode=args.update,
+                ticker_info=info,
             )
 
             all_stats.append(stats)
