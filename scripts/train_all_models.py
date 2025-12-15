@@ -37,6 +37,10 @@ import warnings
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Load .env file before importing settings
+from dotenv import load_dotenv
+load_dotenv(project_root / ".env", override=True)
+
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -87,17 +91,10 @@ def get_tickers_with_data(min_bars: int = 1000) -> List[str]:
         List of ticker symbols
     """
     try:
+        from sqlalchemy import text
+
         with get_db() as db:
-            # Get tickers with bar count
-            stmt = (
-                select(DBMinuteBar.symbol)
-                .group_by(DBMinuteBar.symbol)
-                .having(lambda: f"COUNT(*) >= {min_bars}")
-            )
-
             # Use raw SQL for better compatibility
-            from sqlalchemy import text
-
             result = db.execute(
                 text(
                     f"SELECT symbol, COUNT(*) as bar_count FROM minute_bars "
@@ -486,7 +483,7 @@ def main() -> int:
 
         if successful > 0:
             logger.success("\nModel training complete!")
-            logger.info(f"\nModels saved to: {model_manager.models_path}")
+            logger.info(f"\nModels saved to: {model_manager.models_dir}")
             return 0
         else:
             logger.error("\nAll training failed!")

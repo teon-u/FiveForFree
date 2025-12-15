@@ -82,7 +82,7 @@ def get_target_tickers(
     # Use ticker selector to get top tickers
     logger.info("Selecting target tickers based on volume and gainers...")
     selector = TickerSelector()
-    tickers = selector.get_target_tickers(include_losers=False)
+    tickers = selector.get_target_tickers()
 
     logger.info(f"Selected {len(tickers)} target tickers")
     return tickers
