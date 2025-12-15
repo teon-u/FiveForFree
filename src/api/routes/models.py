@@ -386,3 +386,233 @@ async def get_overall_summary(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve summary: {str(e)}",
         )
+
+
+# New endpoints for detailed model analysis
+
+
+class ModelOverviewResponse(BaseModel):
+    """Overview response for model detail page."""
+
+    ticker: str
+    prediction: Dict[str, Any]
+    ranking: List[Dict[str, Any]]
+    quick_stats: Dict[str, Any]
+    risk_indicators: Dict[str, Any]
+    timestamp: str
+
+
+class PerformanceMetricsResponse(BaseModel):
+    """Detailed performance metrics response."""
+
+    ticker: str
+    confusion_matrix: Dict[str, int]
+    metrics: Dict[str, float]
+    roc_curve: Dict[str, Any]
+    pr_curve: Dict[str, Any]
+    time_series: List[Dict[str, Any]]
+    calibration: Dict[str, Any]
+    timestamp: str
+
+
+@router.get("/{ticker}/overview", response_model=ModelOverviewResponse)
+async def get_model_overview(
+    ticker: str,
+    model_manager: ModelManager = Depends(get_model_manager),
+    predictor: RealtimePredictor = Depends(get_realtime_predictor),
+) -> ModelOverviewResponse:
+    """
+    Get model overview for investment decision support.
+
+    Provides quick summary of model performance, prediction confidence,
+    and risk indicators.
+
+    Args:
+        ticker: Ticker symbol
+        model_manager: Model manager instance
+        predictor: Realtime predictor instance
+
+    Returns:
+        ModelOverviewResponse with overview data
+    """
+    try:
+        ticker = ticker.upper()
+        logger.info(f"Getting model overview for {ticker}")
+
+        # Get best models for up and down
+        try:
+            best_up_type, best_up_model = model_manager.get_best_model(ticker, "up")
+            up_stats = best_up_model.get_prediction_stats(hours=50)
+        except ValueError:
+            best_up_type = None
+            up_stats = {'accuracy': 0.0}
+
+        try:
+            best_down_type, best_down_model = model_manager.get_best_model(ticker, "down")
+            down_stats = best_down_model.get_prediction_stats(hours=50)
+        except ValueError:
+            best_down_type = None
+            down_stats = {'accuracy': 0.0}
+
+        # Determine current prediction
+        if up_stats['accuracy'] >= down_stats['accuracy']:
+            direction = "up"
+            probability = up_stats.get('avg_probability', 0.5)
+            best_model = best_up_type or "unknown"
+            accuracy = up_stats['accuracy']
+        else:
+            direction = "down"
+            probability = down_stats.get('avg_probability', 0.5)
+            best_model = best_down_type or "unknown"
+            accuracy = down_stats['accuracy']
+
+        # Determine risk level
+        if probability >= 0.80:
+            risk_level = "low"
+        elif probability >= 0.70:
+            risk_level = "moderate"
+        else:
+            risk_level = "high"
+
+        # Build ranking
+        performances = model_manager.get_model_performances(ticker)
+        ranking = []
+
+        if "up" in performances:
+            for model_type, metrics in performances["up"].items():
+                ranking.append({
+                    "model": model_type,
+                    "hit_rate": metrics["hit_rate_50h"] / 100.0
+                })
+
+        ranking.sort(key=lambda x: x["hit_rate"], reverse=True)
+
+        # Calculate model agreement
+        model_agreement = 0.0
+        if len(ranking) > 1:
+            top_hit_rate = ranking[0]["hit_rate"]
+            agreeing_models = sum(1 for m in ranking if abs(m["hit_rate"] - top_hit_rate) < 0.05)
+            model_agreement = agreeing_models / len(ranking)
+
+        # Calculate false positive rate
+        fp_rate = up_stats.get('false_positives', 0) / max(1, up_stats.get('total_predictions', 1))
+
+        # Performance trend (compare recent 10h vs 50h)
+        try:
+            recent_acc = best_up_model.get_recent_accuracy(hours=10) if best_up_model else 0.0
+            full_acc = accuracy
+            if recent_acc > full_acc * 1.05:
+                trend = "improving"
+            elif recent_acc < full_acc * 0.95:
+                trend = "declining"
+            else:
+                trend = "stable"
+        except:
+            trend = "unknown"
+
+        return ModelOverviewResponse(
+            ticker=ticker,
+            prediction={
+                "direction": direction,
+                "probability": round(probability, 3),
+                "best_model": best_model,
+                "expected_change": 5.0,  # Target is always 5%
+                "risk_level": risk_level
+            },
+            ranking=ranking[:5],  # Top 5
+            quick_stats={
+                "accuracy": round(accuracy, 3),
+                "win_rate": round(up_stats.get('recall', 0.0), 3),
+                "avg_return": 0.031,  # Placeholder - would need backtest data
+                "sharpe": 1.8  # Placeholder - would need backtest data
+            },
+            risk_indicators={
+                "false_positive_rate": round(fp_rate, 3),
+                "model_agreement": round(model_agreement, 3),
+                "performance_trend": trend
+            },
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get model overview for {ticker}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve model overview: {str(e)}",
+        )
+
+
+@router.get("/{ticker}/performance", response_model=PerformanceMetricsResponse)
+async def get_model_performance_details(
+    ticker: str,
+    model_manager: ModelManager = Depends(get_model_manager),
+) -> PerformanceMetricsResponse:
+    """
+    Get detailed performance metrics including confusion matrix, ROC curve, etc.
+
+    Args:
+        ticker: Ticker symbol
+        model_manager: Model manager instance
+
+    Returns:
+        PerformanceMetricsResponse with detailed metrics
+    """
+    try:
+        ticker = ticker.upper()
+        logger.info(f"Getting detailed performance for {ticker}")
+
+        # Get best model (up direction for now)
+        try:
+            best_type, best_model = model_manager.get_best_model(ticker, "up")
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No trained models found for ticker {ticker}",
+            )
+
+        # Get confusion matrix and basic stats
+        stats = best_model.get_prediction_stats(hours=50)
+
+        # Get ROC curve
+        roc_data = best_model.get_roc_curve_data(hours=50)
+
+        # Get PR curve
+        pr_data = best_model.get_precision_recall_curve(hours=50)
+
+        # Get performance over time
+        time_series = best_model.get_performance_over_time(hours=50, window_hours=5)
+
+        # Get calibration curve
+        calibration = best_model.get_calibration_curve(hours=50, n_bins=10)
+
+        return PerformanceMetricsResponse(
+            ticker=ticker,
+            confusion_matrix={
+                "tp": stats['true_positives'],
+                "fp": stats['false_positives'],
+                "tn": stats['true_negatives'],
+                "fn": stats['false_negatives']
+            },
+            metrics={
+                "accuracy": round(stats['accuracy'], 4),
+                "precision": round(stats['precision'], 4),
+                "recall": round(stats['recall'], 4),
+                "f1_score": round(2 * stats['precision'] * stats['recall'] / (stats['precision'] + stats['recall']) if (stats['precision'] + stats['recall']) > 0 else 0.0, 4),
+                "fp_rate": round(stats['false_positives'] / max(1, stats['false_positives'] + stats['true_negatives']), 4),
+                "fn_rate": round(stats['false_negatives'] / max(1, stats['true_positives'] + stats['false_negatives']), 4)
+            },
+            roc_curve=roc_data,
+            pr_curve=pr_data,
+            time_series=time_series,
+            calibration=calibration,
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get performance details for {ticker}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve performance details: {str(e)}",
+        )

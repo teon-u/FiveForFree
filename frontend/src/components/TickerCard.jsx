@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-export default function TickerCard({ prediction, onClick }) {
+export default function TickerCard({ prediction, onClick, onDetailClick }) {
   const {
     ticker,
     probability,
@@ -37,8 +37,7 @@ export default function TickerCard({ prediction, onClick }) {
 
   return (
     <div
-      onClick={() => onClick(ticker)}
-      className={clsx('ticker-card', cardStyle)}
+      className={clsx('ticker-card', cardStyle, 'relative')}
     >
       {/* Ticker Symbol */}
       <div className="flex items-start justify-between mb-2">
@@ -64,7 +63,7 @@ export default function TickerCard({ prediction, onClick }) {
       </div>
 
       {/* Model Info */}
-      <div className="text-xs text-gray-400 space-y-1">
+      <div className="text-xs text-gray-400 space-y-1 mb-3">
         <div className="flex items-center justify-between">
           <span>Model:</span>
           <span className="font-semibold text-gray-300">
@@ -79,8 +78,27 @@ export default function TickerCard({ prediction, onClick }) {
         </div>
       </div>
 
-      {/* Hover indicator */}
-      <div className="absolute inset-0 rounded-lg bg-white/0 hover:bg-white/5 transition-colors pointer-events-none" />
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-2 mt-auto">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onClick(ticker)
+          }}
+          className="px-2 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-xs font-medium rounded transition-colors border border-blue-500/30"
+        >
+          📈 차트
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onDetailClick && onDetailClick(ticker)
+          }}
+          className="px-2 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-xs font-medium rounded transition-colors border border-purple-500/30"
+        >
+          🔍 모델
+        </button>
+      </div>
     </div>
   )
 }

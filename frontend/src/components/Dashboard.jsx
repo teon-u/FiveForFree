@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import TickerGrid from './TickerGrid'
 import PredictionPanel from './PredictionPanel'
+import ModelDetailModal from './ModelDetailModal'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState(null)
+  const [detailModalTicker, setDetailModalTicker] = useState(null)
   const [activeCategory, setActiveCategory] = useState('volume') // 'volume' or 'gainers'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
   const { filterMode } = useSettingsStore()
@@ -115,6 +117,7 @@ export default function Dashboard() {
         <TickerGrid
           predictions={activePredictions}
           onTickerClick={setSelectedTicker}
+          onDetailClick={setDetailModalTicker}
         />
       </section>
 
@@ -123,6 +126,14 @@ export default function Dashboard() {
         <PredictionPanel
           ticker={selectedTicker}
           onClose={() => setSelectedTicker(null)}
+        />
+      )}
+
+      {/* Model Detail Modal */}
+      {detailModalTicker && (
+        <ModelDetailModal
+          ticker={detailModalTicker}
+          onClose={() => setDetailModalTicker(null)}
         />
       )}
     </div>
