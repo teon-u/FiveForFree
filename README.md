@@ -1,204 +1,204 @@
-# NASDAQ Short-Term Volatility Prediction System
+# NASDAQ 단기 변동성 예측 시스템
 
-AI-powered system that predicts the probability of NASDAQ stocks experiencing 5%+ price movements within one hour.
+NASDAQ 주식의 1시간 내 5% 이상 가격 변동 확률을 예측하는 AI 기반 시스템입니다.
 
-## 🎯 Overview
+## 🎯 개요
 
-- **Target**: High-volatility NASDAQ stocks (Top 100 by volume + Top 100 gainers)
-- **Prediction**: Probability of 5%+ up/down movement in next 60 minutes
-- **Models**: 5 ML models per ticker (XGBoost, LightGBM, LSTM, Transformer, Ensemble)
-- **Data Source**: Polygon.io Developer Plan ($79/month)
-- **Hardware**: RTX 5080 GPU, AMD Ryzen 9800X3D, 64GB RAM
+- **타겟**: 고변동성 NASDAQ 주식 (거래량 상위 100개 + 상승률 상위 100개)
+- **예측**: 향후 60분 내 5% 이상 상승/하락 확률
+- **모델**: 종목당 5가지 ML 모델 (XGBoost, LightGBM, LSTM, Transformer, Ensemble)
+- **데이터 소스**: Polygon.io Developer Plan ($79/월)
+- **하드웨어**: RTX 5080 GPU, AMD Ryzen 9800X3D, 64GB RAM
 
-## 🚀 Quick Start
+## 🚀 빠른 시작
 
-### 1. Prerequisites
+### 1. 사전 요구사항
 
 ```bash
-# Python 3.10+
+# Python 3.10 이상
 python --version
 
-# CUDA 12.0+ for GPU support
+# GPU 지원을 위한 CUDA 12.0 이상
 nvidia-smi
 ```
 
-### 2. Installation
+### 2. 설치
 
 ```bash
-# Clone repository
+# 저장소 클론
 git clone https://github.com/teon-u/FiveForFree.git
 cd FiveForFree
 
-# Create virtual environment
+# 가상환경 생성
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install Python dependencies
+# Python 의존성 설치
 pip install -r requirements.txt
 
-# Setup frontend
+# 프론트엔드 설정
 cd frontend
 npm install
 cd ..
 ```
 
-### 3. Configuration
+### 3. 환경 설정
 
 ```bash
-# Copy environment template
+# 환경 변수 템플릿 복사
 cp .env.example .env
 
-# Edit .env and add your Polygon.io API key
+# .env 파일을 열어 Polygon.io API 키 추가
 nano .env
 ```
 
-### 4. Initial Setup
+### 4. 초기 설정
 
 ```bash
-# Initialize database
+# 데이터베이스 초기화
 python scripts/init_database.py
 
-# Collect historical data (30 days)
+# 과거 데이터 수집 (30일)
 python scripts/collect_historical.py 30
 
-# Train initial models
+# 초기 모델 학습
 python scripts/train_all_models.py
 ```
 
-### 5. Run System
+### 5. 시스템 실행
 
 ```bash
-# Terminal 1: Start backend
+# 터미널 1: 백엔드 시작
 python scripts/run_system.py
 
-# Terminal 2: Start frontend dev server
+# 터미널 2: 프론트엔드 개발 서버 시작
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+브라우저에서 http://localhost:5173 을 여세요.
 
-## 📁 Project Structure
+## 📁 프로젝트 구조
 
 ```
 FiveForFree/
-├── config/              # Configuration files
+├── config/              # 설정 파일
 ├── src/
-│   ├── collector/       # Data collection from Polygon.io
-│   ├── processor/       # Feature engineering & labeling
-│   ├── models/          # ML models (XGBoost, LSTM, etc.)
-│   ├── trainer/         # GPU-accelerated training
-│   ├── predictor/       # Real-time predictions
-│   ├── backtester/      # Performance simulation
-│   ├── api/             # FastAPI backend
-│   └── utils/           # Utilities
+│   ├── collector/       # Polygon.io 데이터 수집
+│   ├── processor/       # 피처 엔지니어링 및 레이블링
+│   ├── models/          # ML 모델 (XGBoost, LSTM 등)
+│   ├── trainer/         # GPU 가속 학습
+│   ├── predictor/       # 실시간 예측
+│   ├── backtester/      # 성능 시뮬레이션
+│   ├── api/             # FastAPI 백엔드
+│   └── utils/           # 유틸리티
 ├── frontend/            # React + Vite + Tailwind UI
-├── data/                # Raw & processed data
-├── scripts/             # Automation scripts
-└── tests/               # Test suites
+├── data/                # 원시 및 처리된 데이터
+├── scripts/             # 자동화 스크립트
+└── tests/               # 테스트 스위트
 ```
 
-## 🎨 Tech Stack
+## 🎨 기술 스택
 
-### Backend
+### 백엔드
 - **API**: FastAPI + WebSocket
 - **ML**: XGBoost, LightGBM, PyTorch (LSTM/Transformer)
-- **Data**: Polygon.io API, Pandas, NumPy
-- **Database**: SQLite (SQLAlchemy)
-- **Scheduler**: APScheduler
+- **데이터**: Polygon.io API, Pandas, NumPy
+- **데이터베이스**: SQLite (SQLAlchemy)
+- **스케줄러**: APScheduler
 
-### Frontend
-- **Framework**: React 18 + Vite
-- **Styling**: Tailwind CSS
-- **Charts**: Recharts
-- **State**: React Query + Zustand
-- **WebSocket**: native WebSocket API
+### 프론트엔드
+- **프레임워크**: React 18 + Vite
+- **스타일링**: Tailwind CSS
+- **차트**: Recharts
+- **상태관리**: React Query + Zustand
+- **WebSocket**: 네이티브 WebSocket API
 
-## 📊 Features
+## 📊 주요 기능
 
-### Data Collection
-- ✅ Hourly ticker selection (top volume + gainers)
-- ✅ Per-minute OHLCV bars + VWAP
-- ✅ Level 2 order book (bid/ask imbalance)
-- ✅ Market context (SPY, QQQ, VIX, sectors)
+### 데이터 수집
+- ✅ 매시간 종목 선정 (거래량 상위 + 상승률 상위)
+- ✅ 분단위 OHLCV 봉 + VWAP
+- ✅ Level 2 호가창 (매수/매도 불균형)
+- ✅ 시장 맥락 (SPY, QQQ, VIX, 섹터)
 
-### Feature Engineering
-- 📈 57 engineered features across 7 categories
-- 🎯 Automatic label generation (5% threshold)
-- ⚡ GPU-accelerated processing
+### 피처 엔지니어링
+- 📈 7개 카테고리에 걸친 57개 피처 생성
+- 🎯 자동 레이블 생성 (5% 임계값)
+- ⚡ GPU 가속 처리
 
-### Machine Learning
-- 🤖 5 models per ticker per direction (up/down)
-- 🏆 Automatic best-model selection (50-hour accuracy)
-- 🔄 Incremental learning (hourly)
-- 📊 Full retraining (daily after market close)
+### 머신러닝
+- 🤖 종목당 방향(상승/하락)별 5개 모델
+- 🏆 자동 최적 모델 선택 (50시간 정확도 기반)
+- 🔄 증분 학습 (매시간)
+- 📊 전체 재학습 (장 마감 후 매일)
 
-### Backtesting
-- 📉 50-hour rolling window simulation
-- 💰 "5% OR 1 hour" liquidation rule
-- 📈 Per-model hit rate tracking
+### 백테스팅
+- 📉 50시간 롤링 윈도우 시뮬레이션
+- 💰 "5% 달성 또는 1시간 경과" 청산 규칙
+- 📈 모델별 적중률 추적
 
-### Real-time UI
-- 🎴 Card-based ticker display (volume/gainers)
-- 🟢🔴 Color-coded probabilities
-- 📊 Model performance dashboard
-- 📈 60-minute price charts
-- 🔄 WebSocket live updates
+### 실시간 UI
+- 🎴 카드 기반 종목 표시 (거래량/상승률)
+- 🟢🔴 색상으로 구분된 확률
+- 📊 모델 성능 대시보드
+- 📈 60분 가격 차트
+- 🔄 WebSocket 실시간 업데이트
 
-## ⚙️ Automation Workflow
+## ⚙️ 자동화 워크플로우
 
 ### GitHub Actions
-- ✅ Automated testing on push/PR
-- ✅ Code quality checks (Black, Flake8)
-- ✅ Frontend build verification
-- ✅ Docker image builds
+- ✅ Push/PR 시 자동 테스트
+- ✅ 코드 품질 검사 (Black, Flake8)
+- ✅ 프론트엔드 빌드 검증
+- ✅ Docker 이미지 빌드
 
-### Continuous Learning
-- 🔄 Hourly: Incremental training
-- 📅 Daily: Full model retraining
-- 🎯 Auto: Best-model selection
+### 지속적 학습
+- 🔄 매시간: 증분 학습
+- 📅 매일: 전체 모델 재학습
+- 🎯 자동: 최적 모델 선택
 
-## 📈 Performance Metrics
+## 📈 성능 지표
 
-| Scenario | Accuracy | Monthly Trades | Expected Return |
+| 시나리오 | 정확도 | 월간 거래 횟수 | 예상 수익률 |
 |----------|----------|----------------|-----------------|
-| Optimistic | 75% | 200 | +30% |
-| Realistic | 65% | 100 | +10% |
-| Pessimistic | 55% | 50 | ±0% |
+| 낙관적 | 75% | 200 | +30% |
+| 현실적 | 65% | 100 | +10% |
+| 비관적 | 55% | 50 | ±0% |
 
-## 🛠️ Development
+## 🛠️ 개발
 
 ```bash
-# Run tests
+# 테스트 실행
 pytest
 
-# Format code
+# 코드 포맷팅
 black .
 
-# Lint code
+# 코드 린트
 flake8 src/
 
-# Frontend development
+# 프론트엔드 개발
 cd frontend
-npm run dev        # Dev server
-npm run build      # Production build
-npm run preview    # Preview build
+npm run dev        # 개발 서버
+npm run build      # 프로덕션 빌드
+npm run preview    # 빌드 미리보기
 ```
 
-## 📝 License
+## 📝 라이선스
 
-MIT License - see [LICENSE](LICENSE) file for details
+MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-## 🤝 Contributing
+## 🤝 기여하기
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+기여를 환영합니다! 먼저 [CONTRIBUTING.md](CONTRIBUTING.md)를 읽어주세요.
 
-## ⚠️ Disclaimer
+## ⚠️ 면책 조항
 
-This system is for **educational and research purposes only**. Not financial advice. Trading involves substantial risk of loss. Always do your own research and never invest more than you can afford to lose.
+본 시스템은 **교육 및 연구 목적으로만** 제작되었습니다. 투자 조언이 아닙니다. 트레이딩은 상당한 손실 위험을 수반합니다. 항상 스스로 조사하고 감당할 수 있는 범위 내에서만 투자하세요.
 
-## 📞 Support
+## 📞 지원
 
-- 📧 Email: support@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/teon-u/FiveForFree/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/teon-u/FiveForFree/discussions)
+- 📧 이메일: support@example.com
+- 🐛 이슈: [GitHub Issues](https://github.com/teon-u/FiveForFree/issues)
+- 💬 토론: [GitHub Discussions](https://github.com/teon-u/FiveForFree/discussions)
