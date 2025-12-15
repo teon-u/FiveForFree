@@ -1,46 +1,51 @@
-"""Data collection modules for Finnhub API."""
+"""Data collection modules using Yahoo Finance and Finnhub."""
 
-from src.collector.finnhub_client import (
-    FinnhubClientWrapper,
-    get_finnhub_client,
-    RateLimitError
-)
-from src.collector.ticker_selector import (
-    TickerSelector,
-    TickerMetrics
-)
+# Yahoo Finance for price data (primary)
 from src.collector.minute_bars import (
     MinuteBarCollector,
-    MinuteBar
+    MinuteBar,
 )
+
+# Finnhub for real-time quotes and company info (secondary)
+from src.collector.finnhub_client import (
+    get_finnhub_client,
+    FinnhubClientWrapper,
+    RateLimitError,
+)
+
+# Ticker selection (uses both yfinance and Finnhub)
+from src.collector.ticker_selector import (
+    TickerSelector,
+    TickerMetrics,
+)
+
+# Simplified quotes (Finnhub real-time only)
 from src.collector.quotes import (
-    QuoteCollector
+    QuoteCollector,
 )
+
+# Market context (Finnhub quotes)
 from src.collector.market_context import (
     MarketContextCollector,
     MarketContext,
     MarketIndicator,
     SectorPerformance,
-    SectorETF
+    SectorETF,
 )
 
 __all__ = [
+    # Minute bars (Yahoo Finance)
+    'MinuteBarCollector',
+    'MinuteBar',
     # Finnhub client
-    'FinnhubClientWrapper',
     'get_finnhub_client',
+    'FinnhubClientWrapper',
     'RateLimitError',
-
     # Ticker selection
     'TickerSelector',
     'TickerMetrics',
-
-    # Minute bars
-    'MinuteBarCollector',
-    'MinuteBar',
-
     # Quotes
     'QuoteCollector',
-
     # Market context
     'MarketContextCollector',
     'MarketContext',
