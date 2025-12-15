@@ -4,7 +4,7 @@ Backtest Simulator for NASDAQ Prediction System
 Simulates trading based on model predictions using realistic rules:
 - Long Only strategy
 - Entry: up_prob >= threshold (default 70%)
-- Exit: 5% profit OR 60 minutes elapsed
+- Exit: target% profit OR 60 minutes elapsed (target from settings)
 - Commission: 0.2% round-trip
 
 Tracks individual trades and generates comprehensive results.
@@ -164,7 +164,7 @@ class BacktestSimulator:
 
     Simulates Long Only trading with the following rules:
     - Entry: When up_prob >= probability_threshold
-    - Exit: 5% profit target OR 60 minutes time limit
+    - Exit: target% profit OR 60 minutes time limit (target from settings)
     - Commission: 0.2% round-trip (0.1% entry + 0.1% exit)
 
     Tracks all trades and integrates with model accuracy tracking.
@@ -257,7 +257,7 @@ class BacktestSimulator:
             # Calculate intrabar returns
             high_return = ((high - entry_price) / entry_price) * 100
 
-            # Check if 5% target was hit
+            # Check if target was hit
             if high_return >= self.target_percent:
                 # Target hit - exit at target price
                 exit_price = entry_price * (1 + self.target_percent / 100)

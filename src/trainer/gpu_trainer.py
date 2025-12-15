@@ -210,7 +210,7 @@ class GPUParallelTrainer:
         Args:
             ticker: Stock ticker symbol
             X: Feature matrix
-            y_volatility: Binary labels for volatility (±5% movement)
+            y_volatility: Binary labels for volatility (±target% movement)
             y_direction: Binary labels for direction (1=up, 0=down)
 
         Returns:

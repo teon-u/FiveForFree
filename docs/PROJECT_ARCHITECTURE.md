@@ -17,7 +17,7 @@ FiveForFree NASDAQ 예측 시스템의 전체 아키텍처 문서입니다.
 FiveForFree는 NASDAQ 주식의 단기 가격 움직임을 예측하는 머신러닝 시스템입니다.
 
 ### 핵심 목표
-- **예측 대상**: 60분 내 5% 이상 상승/하락 확률
+- **예측 대상**: 60분 내 1% 이상 상승/하락 확률
 - **대상 종목**: NASDAQ 100 + 고거래량 종목 (최대 100개)
 - **모델 앙상블**: XGBoost, LightGBM, LSTM, Transformer
 

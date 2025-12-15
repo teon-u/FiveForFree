@@ -71,8 +71,8 @@ class PredictionResult:
         ticker: Stock ticker symbol
         timestamp: When prediction was made
         current_price: Current stock price
-        up_probability: Final ensemble probability of 5%+ upward movement
-        down_probability: Final ensemble probability of 5%+ downward movement
+        up_probability: Final ensemble probability of target%+ upward movement
+        down_probability: Final ensemble probability of target%+ downward movement
         best_up_model: Best performing model for upward prediction
         best_down_model: Best performing model for downward prediction
         up_model_accuracy: 50-hour accuracy of up model
@@ -381,8 +381,8 @@ class RealtimePredictor:
             direction_up_prob = dir_model.predict_proba(X)[0]
 
             # Calculate hybrid probabilities
-            # P(+5% up) = P(volatility) × P(direction=up | volatility)
-            # P(-5% down) = P(volatility) × P(direction=down | volatility)
+            # P(+target% up) = P(volatility) × P(direction=up | volatility)
+            # P(-target% down) = P(volatility) × P(direction=down | volatility)
             hybrid_up_prob = volatility_prob * direction_up_prob
             hybrid_down_prob = volatility_prob * (1 - direction_up_prob)
 
@@ -691,8 +691,8 @@ class RealtimePredictor:
         Args:
             ticker: Stock ticker symbol
             prediction_time: When the prediction was made
-            actual_up: Whether 5%+ upward movement occurred
-            actual_down: Whether 5%+ downward movement occurred
+            actual_up: Whether target%+ upward movement occurred
+            actual_down: Whether target%+ downward movement occurred
         """
         try:
             # Update all models that made predictions

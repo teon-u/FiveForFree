@@ -35,7 +35,7 @@ You are a specialized agent for validating data collection and data quality in t
 5. **Check Label Generation**
    - Test `src/processor/label_generator.py`
    - Verify target labels are correctly calculated
-   - Check 5% threshold logic
+   - Check 1% threshold logic
    - Validate label distribution (not all 0 or all 1)
 
 6. **Inspect Market Context**

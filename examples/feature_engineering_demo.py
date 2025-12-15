@@ -147,7 +147,7 @@ def demo_label_generation():
     # Initialize label generator
     print("\n2. Initializing LabelGenerator...")
     label_gen = LabelGenerator(
-        target_percent=5.0,
+        target_percent=1.0,
         prediction_horizon_minutes=60,
         commission_pct=0.1
     )
@@ -212,7 +212,7 @@ def demo_integrated_pipeline():
     # Initialize modules
     print("\n2. Initializing modules...")
     feature_eng = FeatureEngineer()
-    label_gen = LabelGenerator(target_percent=5.0, prediction_horizon_minutes=60)
+    label_gen = LabelGenerator(target_percent=1.0, prediction_horizon_minutes=60)
 
     # Compute features
     print("\n3. Computing features...")

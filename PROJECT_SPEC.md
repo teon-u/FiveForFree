@@ -4,11 +4,11 @@
 
 | 항목 | 내용 |
 |------|------|
-| **목표** | 1시간 내 5% 이상 상승/하락 확률 예측 → 수동 매매 의사결정 지원 |
+| **목표** | 1시간 내 1% 이상 상승/하락 확률 예측 → 수동 매매 의사결정 지원 |
 | **대상** | NASDAQ 고변동성 종목 (거래량/상승률 Top 100) |
 | **데이터** | Polygon.io Developer Plan ($79/월) - 1분봉 + Level 2 호가 |
 | **예측** | 상승 확률 / 하락 확률 각각 출력 |
-| **청산** | 5% 도달 OR 1시간 후 무조건 청산 |
+| **청산** | 1% 도달 OR 1시간 후 무조건 청산 |
 | **매매** | Long Only, 1종목 집중, 수동 매매 |
 
 ## 하드웨어 환경
@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     
     # 예측 설정
     PREDICTION_HORIZON_MINUTES: int = 60
-    TARGET_PERCENT: float = 5.0
+    TARGET_PERCENT: float = 1.0
     PROBABILITY_THRESHOLD: float = 0.70
     
     # 백테스팅
@@ -189,8 +189,8 @@ class LabelGenerator:
     def generate_labels(self, minute_bars, entry_time, entry_price) -> dict:
         """
         1시간 후까지의 라벨 생성
-        - label_up: 5% 이상 상승 여부
-        - label_down: 5% 이상 하락 여부
+        - label_up: 1% 이상 상승 여부
+        - label_down: 1% 이상 하락 여부
         """
         future_bars = minute_bars[
             (minute_bars["timestamp"] > entry_time) &
@@ -201,8 +201,8 @@ class LabelGenerator:
         max_loss = ((future_bars["low"] - entry_price) / entry_price * 100).min()
         
         return {
-            "label_up": max_gain >= 5.0,
-            "label_down": max_loss <= -5.0,
+            "label_up": max_gain >= 1.0,
+            "label_down": max_loss <= -1.0,
             "max_gain": max_gain,
             "max_loss": max_loss
         }
@@ -372,7 +372,7 @@ class BacktestSimulator:
     규칙:
     - Long Only
     - 진입: up_prob >= 70%
-    - 청산: 5% 도달 OR 1시간 경과
+    - 청산: 1% 도달 OR 1시간 경과
     - 수수료: 0.1% (왕복 0.2%)
     """
     def simulate_trade(self, ticker, entry_time, entry_price, minute_prices, up_prob):
@@ -382,8 +382,8 @@ class BacktestSimulator:
         for _, row in minute_prices.iterrows():
             high_return = (row["high"] - entry_price) / entry_price * 100
             
-            if high_return >= 5.0:  # 목표가 도달
-                exit_price = entry_price * 1.05
+            if high_return >= 1.0:  # 목표가 도달
+                exit_price = entry_price * 1.01
                 exit_reason = "target_hit"
                 break
             

@@ -2,12 +2,12 @@
 Label Generation Module for NASDAQ Prediction System
 
 Generates binary labels for up/down predictions based on:
-- 5% threshold for significant price movement
+- Configurable threshold for significant price movement (default: 1%)
 - 60-minute prediction horizon
 - Tracks maximum gain/loss for analysis
 
 Hybrid-Ensemble Approach (Structure B):
-- Volatility label: 1 if ±5% movement occurs within horizon
+- Volatility label: 1 if ±threshold movement occurs within horizon
 - Direction label: 1 if upward (given volatility), 0 if downward
 """
 
@@ -26,11 +26,11 @@ class LabelGenerator:
     Generate training labels for NASDAQ prediction models.
 
     Structure A (Direct Prediction):
-    - label_up: 1 if price reaches +5% within 60 minutes, else 0
-    - label_down: 1 if price reaches -5% within 60 minutes, else 0
+    - label_up: 1 if price reaches +target% within 60 minutes, else 0
+    - label_down: 1 if price reaches -target% within 60 minutes, else 0
 
     Structure B (Hybrid-Ensemble):
-    - label_volatility: 1 if price reaches ±5% within 60 minutes, else 0
+    - label_volatility: 1 if price reaches ±target% within 60 minutes, else 0
     - label_direction: 1 if upward movement comes first (given volatility), else 0
       (only meaningful when label_volatility=1)
 
@@ -39,7 +39,7 @@ class LabelGenerator:
 
     def __init__(
         self,
-        target_percent: float = 5.0,
+        target_percent: float = 1.0,
         prediction_horizon_minutes: int = 60,
         commission_pct: float = 0.1
     ):

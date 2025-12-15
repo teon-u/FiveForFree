@@ -5,7 +5,7 @@ This module provides backtesting functionality to evaluate model performance
 on historical data using realistic trading rules:
 - Long Only strategy
 - Entry: up_prob >= threshold (default 70%)
-- Exit: 5% profit OR 60 minutes elapsed
+- Exit: target% profit OR 60 minutes elapsed (target from settings)
 - Commission: 0.2% round-trip (0.1% entry + 0.1% exit)
 
 Components:
