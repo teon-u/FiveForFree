@@ -1,6 +1,6 @@
 import TickerCard from './TickerCard'
 
-export default function TickerGrid({ predictions, onTickerClick }) {
+export default function TickerGrid({ predictions, onTickerClick, onDetailClick }) {
   if (!predictions || predictions.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
@@ -20,6 +20,7 @@ export default function TickerGrid({ predictions, onTickerClick }) {
               <TickerCard
                 prediction={prediction}
                 onClick={onTickerClick}
+                onDetailClick={onDetailClick}
               />
             </div>
           ))}
