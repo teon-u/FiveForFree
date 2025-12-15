@@ -5,6 +5,11 @@ Optimized for NVIDIA RTX 5080:
 - Tree models (XGBoost, LightGBM): Parallel training with ThreadPoolExecutor
 - Neural models (LSTM, Transformer): Sequential training for GPU memory management
 - Batch training for multiple tickers
+
+Hybrid-Ensemble Support:
+- Structure A: Direct up/down prediction models
+- Structure B: Volatility + Direction models
+- Combined training for hybrid-ensemble approach
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -125,16 +130,22 @@ class GPUParallelTrainer:
         ticker: str,
         X: np.ndarray,
         y_up: np.ndarray,
-        y_down: np.ndarray
+        y_down: np.ndarray,
+        y_volatility: np.ndarray = None,
+        y_direction: np.ndarray = None
     ) -> Dict[str, bool]:
         """
         Train all models for a single ticker with separate up/down labels.
 
+        Supports both Structure A (direct) and Structure B (hybrid) training.
+
         Args:
             ticker: Stock ticker symbol
             X: Feature matrix (n_samples, n_features)
-            y_up: Binary labels for upward movement
-            y_down: Binary labels for downward movement
+            y_up: Binary labels for upward movement (Structure A)
+            y_down: Binary labels for downward movement (Structure A)
+            y_volatility: Binary labels for volatility (Structure B, optional)
+            y_direction: Binary labels for direction (Structure B, optional)
 
         Returns:
             Dictionary mapping model keys to training success status
@@ -144,10 +155,11 @@ class GPUParallelTrainer:
 
         results = {}
 
-        # Split data
+        # Split data for Structure A
         X_train, X_val, y_up_train, y_up_val = self._train_val_split(X, y_up)
         _, _, y_down_train, y_down_val = self._train_val_split(X, y_down)
 
+        # ===== Structure A: Direct Prediction Models =====
         # Train "up" models
         logger.info(f"Training 'up' prediction models for {ticker}")
         tree_results = self._train_tree_models_parallel(
@@ -172,11 +184,108 @@ class GPUParallelTrainer:
         )
         results.update(neural_results)
 
+        # ===== Structure B: Hybrid Models (if labels provided) =====
+        if y_volatility is not None and y_direction is not None:
+            hybrid_results = self._train_hybrid_models(
+                ticker, X, y_volatility, y_direction
+            )
+            results.update(hybrid_results)
+
         # Save all trained models
         self.model_manager.save_models(ticker)
 
         logger.info(f"Training completed for {ticker}")
         return results
+
+    def _train_hybrid_models(
+        self,
+        ticker: str,
+        X: np.ndarray,
+        y_volatility: np.ndarray,
+        y_direction: np.ndarray
+    ) -> Dict[str, bool]:
+        """
+        Train Structure B hybrid models (volatility + direction).
+
+        Args:
+            ticker: Stock ticker symbol
+            X: Feature matrix
+            y_volatility: Binary labels for volatility (±5% movement)
+            y_direction: Binary labels for direction (1=up, 0=down)
+
+        Returns:
+            Dictionary mapping model keys to training success status
+        """
+        logger.info(f"Training hybrid models (Structure B) for {ticker}")
+        results = {}
+
+        # Split data
+        X_train, X_val, y_vol_train, y_vol_val = self._train_val_split(X, y_volatility)
+        _, _, y_dir_train, y_dir_val = self._train_val_split(X, y_direction)
+
+        # ===== Train Volatility Models =====
+        logger.info(f"Training 'volatility' prediction models for {ticker}")
+
+        # Tree models for volatility
+        tree_results = self._train_tree_models_parallel(
+            ticker, "volatility", X_train, y_vol_train, X_val, y_vol_val
+        )
+        results.update(tree_results)
+
+        # Neural models for volatility
+        neural_results = self._train_neural_models_sequential(
+            ticker, "volatility", X_train, y_vol_train, X_val, y_vol_val
+        )
+        results.update(neural_results)
+
+        # ===== Train Direction Models =====
+        # Direction model is trained on ALL samples, but predictions are weighted
+        # by volatility probability during inference
+        logger.info(f"Training 'direction' prediction models for {ticker}")
+
+        # Tree models for direction
+        tree_results = self._train_tree_models_parallel(
+            ticker, "direction", X_train, y_dir_train, X_val, y_dir_val
+        )
+        results.update(tree_results)
+
+        # Neural models for direction
+        neural_results = self._train_neural_models_sequential(
+            ticker, "direction", X_train, y_dir_train, X_val, y_dir_val
+        )
+        results.update(neural_results)
+
+        logger.info(f"Hybrid model training completed for {ticker}")
+        return results
+
+    def train_single_ticker_hybrid(
+        self,
+        ticker: str,
+        X: np.ndarray,
+        y_up: np.ndarray,
+        y_down: np.ndarray,
+        y_volatility: np.ndarray,
+        y_direction: np.ndarray
+    ) -> Dict[str, bool]:
+        """
+        Train all models for hybrid-ensemble approach (Structure A + B combined).
+
+        This is the main entry point for full hybrid training.
+
+        Args:
+            ticker: Stock ticker symbol
+            X: Feature matrix (n_samples, n_features)
+            y_up: Binary labels for upward movement (Structure A)
+            y_down: Binary labels for downward movement (Structure A)
+            y_volatility: Binary labels for volatility (Structure B)
+            y_direction: Binary labels for direction (Structure B)
+
+        Returns:
+            Dictionary mapping model keys to training success status
+        """
+        return self.train_single_ticker(
+            ticker, X, y_up, y_down, y_volatility, y_direction
+        )
 
     def _train_tree_models_parallel(
         self,

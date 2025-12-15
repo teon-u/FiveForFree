@@ -6,6 +6,11 @@ Provides real-time predictions for active trading:
 - Computes 57 features in real-time
 - Runs predictions using best-performing models
 - Returns probabilities optimized for UI display
+
+Hybrid-Ensemble Approach:
+- Structure A: Direct up/down probability prediction
+- Structure B: Volatility × Direction probability prediction
+- Final: Weighted ensemble of Structure A and B predictions
 """
 
 from dataclasses import dataclass
@@ -24,6 +29,40 @@ from config.settings import settings
 
 
 @dataclass
+class HybridPredictionDetail:
+    """
+    Detailed breakdown of hybrid-ensemble prediction.
+
+    Attributes:
+        direct_up_prob: Structure A direct up probability
+        direct_down_prob: Structure A direct down probability
+        volatility_prob: Structure B volatility probability
+        direction_up_prob: Structure B direction (up) probability
+        hybrid_up_prob: Structure B combined up probability (vol × dir)
+        hybrid_down_prob: Structure B combined down probability (vol × (1-dir))
+        ensemble_alpha: Weight used for ensemble (α for direct, 1-α for hybrid)
+    """
+    direct_up_prob: float
+    direct_down_prob: float
+    volatility_prob: float
+    direction_up_prob: float
+    hybrid_up_prob: float
+    hybrid_down_prob: float
+    ensemble_alpha: float
+
+    def to_dict(self) -> Dict[str, float]:
+        return {
+            'direct_up_prob': self.direct_up_prob,
+            'direct_down_prob': self.direct_down_prob,
+            'volatility_prob': self.volatility_prob,
+            'direction_up_prob': self.direction_up_prob,
+            'hybrid_up_prob': self.hybrid_up_prob,
+            'hybrid_down_prob': self.hybrid_down_prob,
+            'ensemble_alpha': self.ensemble_alpha
+        }
+
+
+@dataclass
 class PredictionResult:
     """
     Result of a real-time prediction.
@@ -32,12 +71,13 @@ class PredictionResult:
         ticker: Stock ticker symbol
         timestamp: When prediction was made
         current_price: Current stock price
-        up_probability: Probability of 5%+ upward movement
-        down_probability: Probability of 5%+ downward movement
+        up_probability: Final ensemble probability of 5%+ upward movement
+        down_probability: Final ensemble probability of 5%+ downward movement
         best_up_model: Best performing model for upward prediction
         best_down_model: Best performing model for downward prediction
         up_model_accuracy: 50-hour accuracy of up model
         down_model_accuracy: 50-hour accuracy of down model
+        hybrid_detail: Detailed hybrid-ensemble breakdown (optional)
         all_model_predictions: Predictions from all models (optional)
         features: Computed features (optional)
         market_context: Market context data (optional)
@@ -51,6 +91,7 @@ class PredictionResult:
     best_down_model: str
     up_model_accuracy: float
     down_model_accuracy: float
+    hybrid_detail: Optional[HybridPredictionDetail] = None
     all_model_predictions: Optional[Dict[str, Dict[str, float]]] = None
     features: Optional[np.ndarray] = None
     market_context: Optional[Dict[str, Any]] = None
@@ -67,6 +108,7 @@ class PredictionResult:
             'best_down_model': self.best_down_model,
             'up_model_accuracy': self.up_model_accuracy,
             'down_model_accuracy': self.down_model_accuracy,
+            'hybrid_detail': self.hybrid_detail.to_dict() if self.hybrid_detail else None,
             'all_model_predictions': self.all_model_predictions,
             'market_context': self.market_context
         }
@@ -167,15 +209,17 @@ class RealtimePredictor:
         self,
         ticker: str,
         include_all_models: bool = False,
-        include_features: bool = False
+        include_features: bool = False,
+        use_hybrid: bool = None
     ) -> PredictionResult:
         """
-        Generate real-time prediction for a ticker.
+        Generate real-time prediction for a ticker using hybrid-ensemble approach.
 
         Args:
             ticker: Stock ticker symbol
             include_all_models: Include predictions from all models (not just best)
             include_features: Include computed features in result
+            use_hybrid: Use hybrid-ensemble approach (default: from settings)
 
         Returns:
             PredictionResult with probabilities and metadata
@@ -186,6 +230,9 @@ class RealtimePredictor:
         """
         logger.debug(f"Generating prediction for {ticker}")
         start_time = datetime.now()
+
+        # Determine if hybrid mode is enabled
+        use_hybrid = use_hybrid if use_hybrid is not None else settings.USE_HYBRID_ENSEMBLE
 
         # Step 1: Collect minute bars
         minute_bars = self._collect_minute_bars(ticker)
@@ -213,16 +260,57 @@ class RealtimePredictor:
 
         # Step 5: Run predictions
         try:
-            # Get best models and their predictions
+            # ===== Structure A: Direct Prediction =====
             best_up_type, best_up_model = self.model_manager.get_best_model(ticker, "up")
             best_down_type, best_down_model = self.model_manager.get_best_model(ticker, "down")
 
-            up_prob = best_up_model.predict_proba(X)[0]
-            down_prob = best_down_model.predict_proba(X)[0]
+            direct_up_prob = best_up_model.predict_proba(X)[0]
+            direct_down_prob = best_down_model.predict_proba(X)[0]
 
             # Get model accuracies
             up_accuracy = best_up_model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
             down_accuracy = best_down_model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+
+            # Initialize final probabilities (default to direct predictions)
+            final_up_prob = direct_up_prob
+            final_down_prob = direct_down_prob
+            hybrid_detail = None
+
+            # ===== Structure B: Hybrid Prediction (if enabled) =====
+            if use_hybrid:
+                hybrid_result = self._predict_hybrid(ticker, X)
+
+                if hybrid_result is not None:
+                    volatility_prob, direction_up_prob, hybrid_up_prob, hybrid_down_prob = hybrid_result
+
+                    # ===== Ensemble: Combine Structure A and B =====
+                    alpha = settings.ENSEMBLE_ALPHA
+
+                    final_up_prob = alpha * direct_up_prob + (1 - alpha) * hybrid_up_prob
+                    final_down_prob = alpha * direct_down_prob + (1 - alpha) * hybrid_down_prob
+
+                    # Apply calibration if needed
+                    final_up_prob, final_down_prob = self._calibrate_probabilities(
+                        final_up_prob, final_down_prob
+                    )
+
+                    # Store hybrid detail
+                    hybrid_detail = HybridPredictionDetail(
+                        direct_up_prob=float(direct_up_prob),
+                        direct_down_prob=float(direct_down_prob),
+                        volatility_prob=float(volatility_prob),
+                        direction_up_prob=float(direction_up_prob),
+                        hybrid_up_prob=float(hybrid_up_prob),
+                        hybrid_down_prob=float(hybrid_down_prob),
+                        ensemble_alpha=alpha
+                    )
+
+                    logger.debug(
+                        f"Hybrid prediction for {ticker}: "
+                        f"Direct(UP={direct_up_prob:.3f}, DOWN={direct_down_prob:.3f}), "
+                        f"Hybrid(VOL={volatility_prob:.3f}, DIR={direction_up_prob:.3f}), "
+                        f"Final(UP={final_up_prob:.3f}, DOWN={final_down_prob:.3f})"
+                    )
 
             # Optionally get predictions from all models
             all_predictions = None
@@ -234,25 +322,27 @@ class RealtimePredictor:
                 ticker=ticker,
                 timestamp=datetime.now(),
                 current_price=float(current_price),
-                up_probability=float(up_prob),
-                down_probability=float(down_prob),
+                up_probability=float(final_up_prob),
+                down_probability=float(final_down_prob),
                 best_up_model=best_up_type,
                 best_down_model=best_down_type,
                 up_model_accuracy=float(up_accuracy),
                 down_model_accuracy=float(down_accuracy),
+                hybrid_detail=hybrid_detail,
                 all_model_predictions=all_predictions,
                 features=X[0] if include_features else None,
                 market_context=market_context if include_features else None
             )
 
             # Log prediction to models for accuracy tracking
-            best_up_model.record_prediction(up_prob, result.timestamp, X)
-            best_down_model.record_prediction(down_prob, result.timestamp, X)
+            best_up_model.record_prediction(final_up_prob, result.timestamp, X)
+            best_down_model.record_prediction(final_down_prob, result.timestamp, X)
 
             elapsed = (datetime.now() - start_time).total_seconds()
             logger.info(
-                f"Prediction for {ticker}: UP={up_prob:.3f} ({best_up_type}), "
-                f"DOWN={down_prob:.3f} ({best_down_type}), "
+                f"Prediction for {ticker}: UP={final_up_prob:.3f} ({best_up_type}), "
+                f"DOWN={final_down_prob:.3f} ({best_down_type}), "
+                f"hybrid={'enabled' if use_hybrid and hybrid_detail else 'disabled'}, "
                 f"elapsed={elapsed:.3f}s"
             )
 
@@ -264,6 +354,81 @@ class RealtimePredictor:
         except Exception as e:
             logger.error(f"Prediction failed for {ticker}: {e}")
             raise RuntimeError(f"Prediction failed: {e}")
+
+    def _predict_hybrid(
+        self,
+        ticker: str,
+        X: np.ndarray
+    ) -> Optional[Tuple[float, float, float, float]]:
+        """
+        Generate Structure B hybrid prediction (volatility × direction).
+
+        Args:
+            ticker: Stock ticker symbol
+            X: Feature vector
+
+        Returns:
+            Tuple of (volatility_prob, direction_up_prob, hybrid_up_prob, hybrid_down_prob)
+            or None if hybrid models not available
+        """
+        try:
+            # Get volatility model
+            _, vol_model = self.model_manager.get_best_model(ticker, "volatility")
+            volatility_prob = vol_model.predict_proba(X)[0]
+
+            # Get direction model
+            _, dir_model = self.model_manager.get_best_model(ticker, "direction")
+            direction_up_prob = dir_model.predict_proba(X)[0]
+
+            # Calculate hybrid probabilities
+            # P(+5% up) = P(volatility) × P(direction=up | volatility)
+            # P(-5% down) = P(volatility) × P(direction=down | volatility)
+            hybrid_up_prob = volatility_prob * direction_up_prob
+            hybrid_down_prob = volatility_prob * (1 - direction_up_prob)
+
+            return volatility_prob, direction_up_prob, hybrid_up_prob, hybrid_down_prob
+
+        except (ValueError, KeyError) as e:
+            logger.warning(f"Hybrid models not available for {ticker}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Hybrid prediction failed for {ticker}: {e}")
+            return None
+
+    def _calibrate_probabilities(
+        self,
+        up_prob: float,
+        down_prob: float
+    ) -> Tuple[float, float]:
+        """
+        Calibrate ensemble probabilities to prevent over/under estimation.
+
+        When combining probabilities from multiple structures, the product
+        can lead to underestimation. This method applies calibration.
+
+        Args:
+            up_prob: Raw ensemble up probability
+            down_prob: Raw ensemble down probability
+
+        Returns:
+            Tuple of (calibrated_up_prob, calibrated_down_prob)
+        """
+        # Simple calibration: ensure probabilities are in valid range
+        # More sophisticated calibration (Platt/Isotonic) would require
+        # historical data and is handled separately in training
+
+        # Clip to valid range
+        up_prob = max(0.0, min(1.0, up_prob))
+        down_prob = max(0.0, min(1.0, down_prob))
+
+        # Optional: Normalize if sum > 1 (rare case)
+        # This can happen with independent models
+        total = up_prob + down_prob
+        if total > 1.0:
+            up_prob = up_prob / total
+            down_prob = down_prob / total
+
+        return up_prob, down_prob
 
     def predict_batch(
         self,
@@ -453,7 +618,7 @@ class RealtimePredictor:
         X: np.ndarray
     ) -> Dict[str, Dict[str, float]]:
         """
-        Get predictions from all available models.
+        Get predictions from all available models (Structure A + B).
 
         Args:
             ticker: Stock ticker symbol
@@ -464,23 +629,50 @@ class RealtimePredictor:
         """
         all_predictions = {}
 
+        # Structure A targets
         for target in settings.PREDICTION_TARGETS:
             all_predictions[target] = {}
 
-            models = self.model_manager.get_all_models(ticker, target)
+            try:
+                models = self.model_manager.get_all_models(ticker, target)
 
-            for model_type, model in models.items():
-                if model.is_trained:
-                    try:
-                        prob = model.predict_proba(X)[0]
-                        accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+                for model_type, model in models.items():
+                    if model.is_trained:
+                        try:
+                            prob = model.predict_proba(X)[0]
+                            accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
 
-                        all_predictions[target][model_type] = {
-                            'probability': float(prob),
-                            'accuracy': float(accuracy)
-                        }
-                    except Exception as e:
-                        logger.error(f"Failed to get prediction from {model_type}: {e}")
+                            all_predictions[target][model_type] = {
+                                'probability': float(prob),
+                                'accuracy': float(accuracy)
+                            }
+                        except Exception as e:
+                            logger.error(f"Failed to get prediction from {model_type}: {e}")
+            except Exception as e:
+                logger.debug(f"Models not available for {target}: {e}")
+
+        # Structure B targets (if hybrid is enabled)
+        if settings.USE_HYBRID_ENSEMBLE:
+            for target in settings.HYBRID_TARGETS:
+                all_predictions[target] = {}
+
+                try:
+                    models = self.model_manager.get_all_models(ticker, target)
+
+                    for model_type, model in models.items():
+                        if model.is_trained:
+                            try:
+                                prob = model.predict_proba(X)[0]
+                                accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+
+                                all_predictions[target][model_type] = {
+                                    'probability': float(prob),
+                                    'accuracy': float(accuracy)
+                                }
+                            except Exception as e:
+                                logger.error(f"Failed to get hybrid prediction from {model_type}: {e}")
+                except Exception as e:
+                    logger.debug(f"Hybrid models not available for {target}: {e}")
 
         return all_predictions
 

@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     MODEL_TYPES: list[str] = ["xgboost", "lightgbm", "lstm", "transformer", "ensemble"]
     PREDICTION_TARGETS: list[str] = ["up", "down"]
 
+    # Hybrid-Ensemble Settings (Structure B)
+    HYBRID_TARGETS: list[str] = ["volatility", "direction"]  # Structure B targets
+    USE_HYBRID_ENSEMBLE: bool = True  # Enable hybrid-ensemble approach
+    ENSEMBLE_ALPHA: float = 0.5  # Weight for direct prediction (1-alpha for hybrid)
+    CALIBRATION_METHOD: str = "isotonic"  # "platt" or "isotonic" for probability calibration
+
     # Feature Engineering
     NUM_FEATURES: int = 57
 
