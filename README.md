@@ -7,7 +7,7 @@ NASDAQ 주식의 1시간 내 5% 이상 가격 변동 확률을 예측하는 AI �
 - **타겟**: 고변동성 NASDAQ 주식 (인기 종목 중 거래량 상위 50개 + 상승률 상위 50개)
 - **예측**: 향후 60분 내 5% 이상 상승/하락 확률
 - **모델**: 종목당 5가지 ML 모델 (XGBoost, LightGBM, LSTM, Transformer, Ensemble)
-- **데이터 소스**: Finnhub 무료 티어 (무료!) + Yahoo Finance
+- **데이터 소스**: Yahoo Finance (무료!) + Finnhub 무료 티어
 - **하드웨어**: RTX 5080 GPU, AMD Ryzen 9800X3D, 64GB RAM
 
 ## 🚀 빠른 시작
@@ -104,7 +104,7 @@ FiveForFree/
 ### 백엔드
 - **API**: FastAPI + WebSocket
 - **ML**: XGBoost, LightGBM, PyTorch (LSTM/Transformer)
-- **데이터**: Finnhub API (무료), Yahoo Finance, Pandas, NumPy
+- **데이터**: Yahoo Finance (주), Finnhub API (보조), Pandas, NumPy
 - **데이터베이스**: SQLite (SQLAlchemy)
 - **스케줄러**: APScheduler
 
@@ -119,8 +119,8 @@ FiveForFree/
 
 ### 데이터 수집
 - ✅ 매시간 종목 선정 (인기 종목 중 거래량 상위 + 상승률 상위)
-- ✅ 5분봉 OHLCV 데이터 + VWAP 계산
-- ✅ 실시간 호가 (현재가, 고가, 저가)
+- ✅ 1분봉 OHLCV 데이터 (Yahoo Finance, 최근 7일)
+- ✅ 실시간 호가 (Finnhub, 현재가/고가/저가)
 - ✅ 시장 맥락 (SPY, QQQ, VXX, 주요 섹터 ETF)
 
 ### 피처 엔지니어링
