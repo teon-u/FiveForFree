@@ -4,6 +4,7 @@ import { api } from '../services/api'
 import OverviewTab from './OverviewTab'
 import PerformanceTab from './PerformanceTab'
 import EnsembleTab from './EnsembleTab'
+import FinancialTab from './FinancialTab'
 
 export default function ModelDetailModal({ ticker, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
@@ -50,14 +51,27 @@ export default function ModelDetailModal({ ticker, onClose }) {
     staleTime: 60000,
   })
 
+  // Fetch financial data
+  const { data: financialData, isLoading: financialLoading } = useQuery({
+    queryKey: ['model-financial', ticker],
+    queryFn: async () => {
+      const response = await api.get(`/models/${ticker}/financial`)
+      return response.data
+    },
+    enabled: !!ticker && activeTab === 'financial',
+    staleTime: 60000,
+  })
+
   const isLoading = activeTab === 'overview' ? overviewLoading :
                      activeTab === 'performance' ? performanceLoading :
-                     ensembleLoading
+                     activeTab === 'ensemble' ? ensembleLoading :
+                     financialLoading
 
   const tabs = [
     { id: 'overview', label: '📊 Overview', icon: '📊' },
     { id: 'performance', label: '📈 Performance', icon: '📈' },
     { id: 'ensemble', label: '🎭 Ensemble', icon: '🎭' },
+    { id: 'financial', label: '💰 Financial', icon: '💰' },
   ]
 
   return (
@@ -146,6 +160,9 @@ export default function ModelDetailModal({ ticker, onClose }) {
                   )}
                   {activeTab === 'ensemble' && ensembleData && (
                     <EnsembleTab data={ensembleData} ticker={ticker} />
+                  )}
+                  {activeTab === 'financial' && financialData && (
+                    <FinancialTab data={financialData} ticker={ticker} />
                   )}
                 </>
               )}

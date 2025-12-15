@@ -776,3 +776,106 @@ async def get_ensemble_analysis(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve ensemble analysis: {str(e)}",
         )
+
+
+class FinancialAnalysisResponse(BaseModel):
+    """Financial performance and backtest results."""
+
+    ticker: str
+    equity_curve: List[Dict[str, Any]]
+    risk_metrics: Dict[str, Any]
+    trade_metrics: Dict[str, Any]
+    trade_distribution: List[Dict[str, Any]]
+    recent_trades: List[Dict[str, Any]]
+    timestamp: str
+
+
+@router.get("/{ticker}/financial", response_model=FinancialAnalysisResponse)
+async def get_financial_analysis(
+    ticker: str,
+    hours: int = Query(50, description="Hours to look back for backtest"),
+    model_manager: ModelManager = Depends(get_model_manager),
+) -> FinancialAnalysisResponse:
+    """
+    Get financial performance and backtest results for a ticker.
+
+    Includes equity curve, risk metrics (Sharpe, Sortino, Max Drawdown),
+    trade statistics, and recent trade history.
+
+    Args:
+        ticker: Ticker symbol
+        hours: Hours to look back (default 50)
+        model_manager: Model manager instance
+
+    Returns:
+        FinancialAnalysisResponse with backtest results and metrics
+
+    Raises:
+        HTTPException: If ticker not found or no models exist
+    """
+    try:
+        ticker = ticker.upper()
+        logger.info(f"Getting financial analysis for {ticker} (last {hours}h)")
+
+        # Get best model for "up" direction (primary trading direction)
+        try:
+            best_model_type, _ = model_manager.get_best_model(ticker, "up")
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No trained models found for {ticker}",
+            )
+
+        # Get the best model instance
+        _, best_model = model_manager.get_or_create_model(ticker, best_model_type, "up")
+
+        if not best_model.is_trained:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model not trained for {ticker}",
+            )
+
+        # Get backtest results
+        backtest = best_model.get_backtest_results(hours=hours)
+
+        # Extract metrics
+        metrics = backtest['metrics']
+
+        # Split metrics into risk and trade categories
+        risk_metrics = {
+            'sharpe_ratio': metrics['sharpe_ratio'],
+            'sortino_ratio': metrics['sortino_ratio'],
+            'max_drawdown': metrics['max_drawdown'],
+            'calmar_ratio': metrics['calmar_ratio']
+        }
+
+        trade_metrics = {
+            'total_trades': metrics['total_trades'],
+            'win_rate': metrics['win_rate'],
+            'total_return': metrics['total_return'],
+            'avg_return': metrics['avg_return'],
+            'avg_win': metrics['avg_win'],
+            'avg_loss': metrics['avg_loss'],
+            'best_trade': metrics['best_trade'],
+            'worst_trade': metrics['worst_trade'],
+            'profit_factor': metrics['profit_factor']
+        }
+
+        return FinancialAnalysisResponse(
+            ticker=ticker,
+            equity_curve=backtest['equity_curve'],
+            risk_metrics=risk_metrics,
+            trade_metrics=trade_metrics,
+            trade_distribution=backtest['trade_distribution'],
+            recent_trades=backtest['recent_trades'],
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get financial analysis for {ticker}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve financial analysis: {str(e)}",
+        )
