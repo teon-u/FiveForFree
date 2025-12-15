@@ -9,7 +9,7 @@
 **FiveForFree**는 NASDAQ 주식의 단기 가격 움직임을 예측하는 머신러닝 시스템입니다.
 
 - **예측 대상**: 60분 내 상승/하락 확률
-- **데이터 소스**: Yahoo Finance (분봉), Finnhub (실시간 호가)
+- **데이터 소스**: Yahoo Finance (5분봉), Finnhub (실시간 호가)
 - **모델**: XGBoost, LightGBM, LSTM, Transformer, Ensemble
 - **기술 스택**: Python, FastAPI, SQLite, React
 
@@ -23,7 +23,6 @@
 |----------|----------|
 | 전체 구조 파악 | `docs/PROJECT_ARCHITECTURE.md` |
 | 데이터 수집 관련 | `docs/DATA_COLLECTION.md` |
-| 피처 엔지니어링 | `docs/FEATURE_ENGINEERING_IMPLEMENTATION.md` |
 | 피처 상세 | `docs/FEATURES_REFERENCE.md` |
 | 모델/앙상블 | `docs/HYBRID_ENSEMBLE_ARCHITECTURE.md` |
 | 테스트 | `docs/TESTING.md` |
@@ -52,8 +51,6 @@
 - `docs/FEATURES_REFERENCE.md` 업데이트
   - 피처 추가/삭제
   - 피처 계산 방식 변경
-- `docs/FEATURE_ENGINEERING_IMPLEMENTATION.md` 업데이트
-  - 파이프라인 변경
 
 #### 3. 모델 변경 시
 - `docs/HYBRID_ENSEMBLE_ARCHITECTURE.md` 업데이트
@@ -131,6 +128,31 @@ src/
 
 ---
 
+## 데이터 수집 전략
+
+### 권장 운영 방식
+
+```bash
+# 1. 첫 실행: 60일치 5분봉 전체 수집
+python scripts/collect_historical.py --days 60
+
+# 2. 이후 매일: 증분 수집만 (--update)
+python scripts/collect_historical.py --update
+```
+
+### 데이터 축적 예상
+
+| 운영 기간 | 축적 데이터 |
+|----------|-----------|
+| 첫 실행 | 60일 |
+| 1개월 후 | 90일 |
+| **2개월 후** | **120일 (4개월)** |
+| 6개월 후 | 240일 (8개월) |
+
+자세한 내용: `docs/DATA_COLLECTION.md` 참조
+
+---
+
 ## 데이터베이스 스키마
 
 `src/utils/database.py` 참조:
@@ -149,7 +171,13 @@ src/
 
 ### 데이터 수집
 ```bash
-python scripts/collect_historical.py
+# 첫 실행 (60일치)
+python scripts/collect_historical.py --days 60
+
+# 증분 수집
+python scripts/collect_historical.py --update
+
+# 특정 종목
 python scripts/collect_historical.py --days 60 --tickers AAPL MSFT
 ```
 
@@ -232,9 +260,8 @@ FINNHUB_API_KEY=your_api_key_here
 | 문서 | 경로 | 내용 |
 |------|------|------|
 | 프로젝트 아키텍처 | `docs/PROJECT_ARCHITECTURE.md` | 전체 구조, 모듈, 데이터 흐름 |
-| 데이터 수집 | `docs/DATA_COLLECTION.md` | 수집 로직, API, 제한사항 |
-| 피처 엔지니어링 | `docs/FEATURE_ENGINEERING_IMPLEMENTATION.md` | 피처 구현 상세 |
-| 피처 레퍼런스 | `docs/FEATURES_REFERENCE.md` | 57개 피처 목록 |
+| 데이터 수집 | `docs/DATA_COLLECTION.md` | 수집 로직, 축적 전략, API 제한 |
+| 피처 레퍼런스 | `docs/FEATURES_REFERENCE.md` | 57개 피처 목록, 파이프라인 |
 | 앙상블 아키텍처 | `docs/HYBRID_ENSEMBLE_ARCHITECTURE.md` | 모델 앙상블 구조 |
 | 테스트 가이드 | `docs/TESTING.md` | 테스트 실행 방법 |
 | Claude 지침 | `claude.md` | 본 문서 |
