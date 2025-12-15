@@ -300,10 +300,10 @@ async def get_categorized_predictions(
     settings: Settings = Depends(get_settings),
 ) -> CategorizedPredictionsResponse:
     """
-    Get predictions for volume top 100 and gainers top 100 tickers.
+    Get predictions for trained tickers from database.
 
-    Returns predictions categorized by volume and price gainers for
-    frontend toggle display.
+    Returns predictions for tickers that have trained models.
+    Uses cached database tickers instead of live Yahoo Finance data for speed.
 
     Args:
         threshold: Minimum probability threshold (optional filter)
@@ -311,14 +311,34 @@ async def get_categorized_predictions(
         settings: Application settings
 
     Returns:
-        CategorizedPredictionsResponse with volume and gainers predictions
+        CategorizedPredictionsResponse with predictions
     """
     try:
-        logger.info("Fetching categorized predictions for volume/gainers")
+        logger.info("Fetching predictions for trained tickers")
 
-        # Get current top tickers by category
-        ticker_selector = TickerSelector()
-        categories = ticker_selector.get_both_categories()
+        # Use trained tickers from model manager instead of live Yahoo Finance
+        from src.api.dependencies import get_model_manager
+        model_manager = get_model_manager()
+        trained_tickers = model_manager.get_tickers()
+
+        if not trained_tickers:
+            logger.warning("No trained tickers available")
+            return CategorizedPredictionsResponse(
+                volume_top_100=[],
+                gainers_top_100=[],
+                timestamp=datetime.utcnow().isoformat(),
+            )
+
+        # Create mock categories structure using trained tickers
+        class MockTickerMetrics:
+            def __init__(self, ticker):
+                self.ticker = ticker
+                self.change_percent = 0.0
+
+        categories = {
+            'volume': [MockTickerMetrics(t) for t in trained_tickers[:50]],
+            'gainers': [MockTickerMetrics(t) for t in trained_tickers[:50]],
+        }
 
         if not categories:
             logger.warning("No tickers available from ticker selector")

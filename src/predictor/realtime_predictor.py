@@ -503,7 +503,7 @@ class RealtimePredictor:
 
     def _collect_minute_bars(self, ticker: str) -> Optional[pd.DataFrame]:
         """
-        Collect minute bar data for feature computation.
+        Collect minute bar data for feature computation from database.
 
         Args:
             ticker: Stock ticker symbol
@@ -516,35 +516,22 @@ class RealtimePredictor:
             return None
 
         try:
-            # Get bars from current time back to lookback period
+            # Get bars from database for lookback period
             end_time = datetime.now()
-            start_time = end_time - timedelta(minutes=self.lookback_minutes)
+            start_time = end_time - timedelta(days=7)  # Get last 7 days of data
 
-            bars = self.minute_bar_collector.collect_range(
+            # Use get_bars_as_dataframe which loads from database
+            df = self.minute_bar_collector.get_bars_as_dataframe(
                 ticker,
                 start_time,
                 end_time
             )
 
-            if bars:
-                # Convert to DataFrame
-                df = pd.DataFrame([
-                    {
-                        'timestamp': bar.timestamp,
-                        'open': bar.open,
-                        'high': bar.high,
-                        'low': bar.low,
-                        'close': bar.close,
-                        'volume': bar.volume,
-                        'vwap': bar.vwap
-                    }
-                    for bar in bars
-                ])
-
-                logger.debug(f"Collected {len(df)} minute bars for {ticker}")
+            if df is not None and len(df) > 0:
+                logger.debug(f"Loaded {len(df)} minute bars for {ticker} from database")
                 return df
             else:
-                logger.warning(f"No minute bars collected for {ticker}")
+                logger.warning(f"No minute bars found for {ticker} in database")
                 return None
 
         except Exception as e:

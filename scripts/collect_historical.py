@@ -126,6 +126,12 @@ def collect_ticker_data(
     """
     Collect historical data for a single ticker.
 
+    MinuteBarCollector.get_bars() internally handles:
+    - Loading existing data from DB
+    - Fetching only new data from Yahoo Finance
+    - Saving new data to DB (with duplicate checking)
+    - Returning combined dataset
+
     Args:
         ticker: Stock ticker symbol
         days: Number of days to collect
@@ -164,7 +170,17 @@ def collect_ticker_data(
                 f"{ticker}: Collecting {days} days ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})"
             )
 
-        # Collect minute bars
+        # Get existing bar count before collection
+        existing_count = 0
+        with get_db() as db:
+            from sqlalchemy import func
+            stmt = (
+                select(func.count(DBMinuteBar.id))
+                .where(DBMinuteBar.symbol == ticker)
+            )
+            existing_count = db.execute(stmt).scalar() or 0
+
+        # Collect minute bars (MinuteBarCollector handles DB saving internally)
         bars = collector.get_bars(ticker, start_date, end_date)
 
         if not bars:
@@ -172,51 +188,26 @@ def collect_ticker_data(
             return stats
 
         stats["bars_collected"] = len(bars)
-        logger.info(f"{ticker}: Collected {len(bars)} bars")
 
-        # Save to database
+        # Get new bar count after collection
         with get_db() as db:
-            # Get or create ticker record
-            ticker_record = get_or_create_ticker(db, ticker)
+            from sqlalchemy import func
+            stmt = (
+                select(func.count(DBMinuteBar.id))
+                .where(DBMinuteBar.symbol == ticker)
+            )
+            new_count = db.execute(stmt).scalar() or 0
 
-            # Insert minute bars
-            saved_count = 0
-            for bar in bars:
-                try:
-                    # Convert to database model
-                    db_bar = DBMinuteBar(
-                        ticker_id=ticker_record.id,
-                        symbol=ticker,
-                        timestamp=bar.datetime,
-                        open=bar.open,
-                        high=bar.high,
-                        low=bar.low,
-                        close=bar.close,
-                        volume=bar.volume,
-                        vwap=bar.vwap,
-                        trade_count=bar.transactions,
-                    )
-
-                    db.add(db_bar)
-                    saved_count += 1
-
-                    # Commit in batches
-                    if saved_count % 1000 == 0:
-                        db.commit()
-                        logger.debug(f"{ticker}: Saved {saved_count} bars...")
-
-                except Exception as e:
-                    # Skip duplicate or invalid bars
-                    logger.debug(f"{ticker}: Failed to save bar: {e}")
-                    stats["errors"] += 1
-                    continue
-
-            # Final commit
-            db.commit()
-
-        stats["bars_saved"] = saved_count
+        stats["bars_saved"] = new_count - existing_count
         stats["success"] = True
-        logger.success(f"{ticker}: Saved {saved_count}/{len(bars)} bars to database")
+
+        if stats["bars_saved"] > 0:
+            logger.success(
+                f"{ticker}: Saved {stats['bars_saved']} new bars "
+                f"(total: {len(bars)} bars)"
+            )
+        else:
+            logger.info(f"{ticker}: No new bars to save (total: {len(bars)} bars)")
 
     except Exception as e:
         logger.error(f"{ticker}: Collection failed: {e}")

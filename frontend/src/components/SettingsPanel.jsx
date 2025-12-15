@@ -2,10 +2,8 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 export default function SettingsPanel({ onClose }) {
   const {
-    targetPercent,
     probabilityThreshold,
     filterMode,
-    setTargetPercent,
     setProbabilityThreshold,
     setFilterMode,
   } = useSettingsStore()
@@ -30,30 +28,6 @@ export default function SettingsPanel({ onClose }) {
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Target Percent */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2">
-              Target Price Change
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min="3"
-                max="10"
-                step="0.5"
-                value={targetPercent}
-                onChange={(e) => setTargetPercent(parseFloat(e.target.value))}
-                className="flex-1 h-2 bg-surface-light rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="w-20 px-3 py-2 bg-surface-light rounded-lg text-center font-semibold">
-                {targetPercent}%
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Expected price movement within 60 minutes
-            </p>
-          </div>
-
           {/* Probability Threshold */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">
@@ -62,7 +36,7 @@ export default function SettingsPanel({ onClose }) {
             <div className="flex items-center gap-4">
               <input
                 type="range"
-                min="50"
+                min="30"
                 max="90"
                 step="5"
                 value={probabilityThreshold}
@@ -74,7 +48,7 @@ export default function SettingsPanel({ onClose }) {
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Minimum probability to highlight predictions
+              Filter predictions below this probability
             </p>
           </div>
 
@@ -128,14 +102,14 @@ export default function SettingsPanel({ onClose }) {
             <h3 className="font-semibold text-sm text-gray-300">About This System</h3>
             <div className="text-xs text-gray-400 space-y-2">
               <p>
-                This system uses 5 ML models (XGBoost, LightGBM, LSTM, Transformer, Ensemble)
-                to predict NASDAQ stock movements.
+                This system uses 4 ML models (XGBoost, LightGBM, LSTM, Transformer)
+                to predict NASDAQ stock movements within 60 minutes.
               </p>
               <p>
-                Predictions are updated every minute using real-time data from Polygon.io.
+                Predictions are generated using historical minute bar data from Yahoo Finance.
               </p>
               <p>
-                Hit rates are calculated based on 50-hour backtesting results.
+                Hit rates are calculated based on backtesting results.
               </p>
             </div>
           </div>
