@@ -189,16 +189,12 @@ npm run preview    # 빌드 미리보기
 
 MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-## 🤝 기여하기
-
-기여를 환영합니다! 먼저 [CONTRIBUTING.md](CONTRIBUTING.md)를 읽어주세요.
-
 ## ⚠️ 면책 조항
 
 본 시스템은 **교육 및 연구 목적으로만** 제작되었습니다. 투자 조언이 아닙니다. 트레이딩은 상당한 손실 위험을 수반합니다. 항상 스스로 조사하고 감당할 수 있는 범위 내에서만 투자하세요.
 
 ## 📞 지원
 
-- 📧 이메일: support@example.com
+- 📧 이메일: dbxowns120@gmail.com
 - 🐛 이슈: [GitHub Issues](https://github.com/teon-u/FiveForFree/issues)
 - 💬 토론: [GitHub Discussions](https://github.com/teon-u/FiveForFree/discussions)
