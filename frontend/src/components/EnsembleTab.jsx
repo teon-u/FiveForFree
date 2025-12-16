@@ -48,14 +48,14 @@ export default function EnsembleTab({ data, ticker }) {
       F1: m.f1_score * 100,
     }))
 
-  // Add ensemble to comparison
+  // Add ensemble to comparison (using actual metrics from API)
   if (ensemble_vs_base.ensemble_accuracy > 0) {
     comparisonData.push({
       model: 'Ensemble',
       Accuracy: ensemble_vs_base.ensemble_accuracy * 100,
-      Precision: ensemble_vs_base.ensemble_accuracy * 100, // Placeholder
-      Recall: ensemble_vs_base.ensemble_accuracy * 100, // Placeholder
-      F1: ensemble_vs_base.ensemble_accuracy * 100, // Placeholder
+      Precision: (ensemble_vs_base.ensemble_precision || 0) * 100,
+      Recall: (ensemble_vs_base.ensemble_recall || 0) * 100,
+      F1: (ensemble_vs_base.ensemble_f1 || 0) * 100,
     })
   }
 
@@ -215,9 +215,9 @@ export default function EnsembleTab({ data, ticker }) {
                   <tr className="border-t-2 border-purple-500/50 bg-purple-500/10">
                     <td className="py-2 text-purple-400 font-bold">Ensemble</td>
                     <td className="text-right py-2 text-purple-300 font-bold">{(ensemble_vs_base.ensemble_accuracy * 100).toFixed(1)}%</td>
-                    <td className="text-right py-2 text-purple-300 font-bold">-</td>
-                    <td className="text-right py-2 text-purple-300 font-bold">-</td>
-                    <td className="text-right py-2 text-purple-300 font-bold">-</td>
+                    <td className="text-right py-2 text-purple-300 font-bold">{((ensemble_vs_base.ensemble_precision || 0) * 100).toFixed(1)}%</td>
+                    <td className="text-right py-2 text-purple-300 font-bold">{((ensemble_vs_base.ensemble_recall || 0) * 100).toFixed(1)}%</td>
+                    <td className="text-right py-2 text-purple-300 font-bold">{((ensemble_vs_base.ensemble_f1 || 0) * 100).toFixed(1)}%</td>
                   </tr>
                 </tbody>
               </table>
