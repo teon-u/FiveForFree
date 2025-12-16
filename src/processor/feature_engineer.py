@@ -568,10 +568,79 @@ class FeatureEngineer:
             df['sector_etf_return'] = market_data.get('sector_return', 0.0)
 
             # 5: Market correlation (correlation with SPY/QQQ)
-            # This would need historical data to compute properly
-            df['market_correlation'] = market_data.get('correlation', 0.0)
+            # Calculate using historical returns if available
+            market_correlation = self._calculate_market_correlation(
+                df, market_data
+            )
+            df['market_correlation'] = market_correlation
 
         return df
+
+    def _calculate_market_correlation(
+        self,
+        df: pd.DataFrame,
+        market_data: Optional[Dict],
+        window: int = 30
+    ) -> float:
+        """
+        Calculate rolling correlation between stock returns and market (SPY/QQQ).
+
+        Args:
+            df: DataFrame with stock price data (must have 'close' column)
+            market_data: Dict containing 'spy_prices' and/or 'qqq_prices' arrays
+            window: Rolling window for correlation calculation (default 30 periods)
+
+        Returns:
+            Correlation coefficient between -1 and 1, or 0.0 if cannot calculate
+        """
+        # Check if we have enough data
+        if df is None or len(df) < window:
+            return market_data.get('correlation', 0.0) if market_data else 0.0
+
+        # Calculate stock returns
+        stock_returns = df['close'].pct_change().dropna()
+
+        if len(stock_returns) < window:
+            return market_data.get('correlation', 0.0) if market_data else 0.0
+
+        if market_data is None:
+            return 0.0
+
+        # Try SPY returns first
+        spy_prices = market_data.get('spy_prices')
+        qqq_prices = market_data.get('qqq_prices')
+
+        correlation = 0.0
+
+        if spy_prices is not None and len(spy_prices) >= len(stock_returns):
+            try:
+                spy_returns = pd.Series(spy_prices).pct_change().dropna()
+                # Align lengths
+                min_len = min(len(stock_returns), len(spy_returns))
+                if min_len >= window:
+                    spy_corr = stock_returns.iloc[-min_len:].corr(spy_returns.iloc[-min_len:])
+                    if not np.isnan(spy_corr):
+                        correlation = spy_corr
+            except Exception:
+                pass
+
+        # If SPY didn't work, try QQQ
+        if correlation == 0.0 and qqq_prices is not None and len(qqq_prices) >= len(stock_returns):
+            try:
+                qqq_returns = pd.Series(qqq_prices).pct_change().dropna()
+                min_len = min(len(stock_returns), len(qqq_returns))
+                if min_len >= window:
+                    qqq_corr = stock_returns.iloc[-min_len:].corr(qqq_returns.iloc[-min_len:])
+                    if not np.isnan(qqq_corr):
+                        correlation = qqq_corr
+            except Exception:
+                pass
+
+        # Fallback to provided correlation value
+        if correlation == 0.0:
+            correlation = market_data.get('correlation', 0.0)
+
+        return float(correlation)
 
     def _add_time_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
