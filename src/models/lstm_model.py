@@ -91,6 +91,7 @@ class LSTMModel(BaseModel):
 
         self._model: Optional[LSTMNetwork] = None
         self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if HAS_TORCH else None
+        self.input_size: Optional[int] = None  # Set during training, used for loading
 
     def _prepare_sequences(self, X, y=None):
         """Prepare sequences for LSTM."""
@@ -119,9 +120,9 @@ class LSTMModel(BaseModel):
         X_seq, y_seq = self._prepare_sequences(X, y)
 
         # Initialize model
-        input_size = X_seq.shape[2]
+        self.input_size = X_seq.shape[2]
         self._model = LSTMNetwork(
-            input_size=input_size,
+            input_size=self.input_size,
             hidden_size=self.hidden_size,
             num_layers=self.num_layers,
             dropout=self.dropout
@@ -177,7 +178,12 @@ class LSTMModel(BaseModel):
     def save(self, path: Path):
         """Save model to disk."""
         if self._model is not None and HAS_TORCH:
-            torch.save(self._model.state_dict(), path.with_suffix('.pt'))
+            # Save model state with input_size for proper loading
+            save_dict = {
+                'state_dict': self._model.state_dict(),
+                'input_size': self.input_size
+            }
+            torch.save(save_dict, path.with_suffix('.pt'))
         super().save(path)
 
     def load(self, path: Path):
@@ -185,11 +191,22 @@ class LSTMModel(BaseModel):
         super().load(path)
         pt_path = path.with_suffix('.pt')
         if pt_path.exists() and HAS_TORCH:
-            # Need to initialize model first
+            checkpoint = torch.load(pt_path, map_location=self._device)
+
+            # Handle both old format (just state_dict) and new format (dict with input_size)
+            if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+                self.input_size = checkpoint.get('input_size', 49)
+            else:
+                # Old format - just state_dict
+                state_dict = checkpoint
+                self.input_size = self.input_size or 49  # Use existing or default
+
+            # Initialize model with correct input_size
             self._model = LSTMNetwork(
-                input_size=49,  # Default feature count
+                input_size=self.input_size,
                 hidden_size=self.hidden_size,
                 num_layers=self.num_layers,
                 dropout=self.dropout
             ).to(self._device)
-            self._model.load_state_dict(torch.load(pt_path, map_location=self._device))
+            self._model.load_state_dict(state_dict)

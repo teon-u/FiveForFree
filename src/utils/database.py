@@ -297,20 +297,30 @@ def init_db(database_url: Optional[str] = None) -> None:
 
     # Create engine with appropriate settings
     connect_args = {}
-    poolclass = None
+    engine_kwargs = {
+        "echo": False,  # Set to True for SQL debugging
+        "pool_pre_ping": True,  # Verify connections before use
+    }
 
     if url.startswith("sqlite"):
         # SQLite-specific settings
         connect_args = {"check_same_thread": False}
         # Use StaticPool for in-memory databases
         if ":memory:" in url:
-            poolclass = StaticPool
+            engine_kwargs["poolclass"] = StaticPool
+    else:
+        # PostgreSQL/MySQL connection pool settings
+        engine_kwargs.update({
+            "pool_size": 5,  # Number of connections to keep open
+            "max_overflow": 10,  # Max connections beyond pool_size
+            "pool_timeout": 30,  # Seconds to wait for available connection
+            "pool_recycle": 1800,  # Recycle connections after 30 minutes
+        })
 
     engine = create_engine(
         url,
         connect_args=connect_args,
-        poolclass=poolclass,
-        echo=False,  # Set to True for SQL debugging
+        **engine_kwargs,
     )
 
     # Create session factory

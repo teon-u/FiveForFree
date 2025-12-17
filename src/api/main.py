@@ -15,6 +15,7 @@ from src.api.routes import (
     models_router,
     health_router,
 )
+from src.api.middleware import RateLimitMiddleware
 from src.api.websocket import (
     handle_websocket_connection,
     broadcast_predictions,
@@ -137,6 +138,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add rate limiting middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_minute=60,  # 60 requests per minute
+    requests_per_hour=1000,  # 1000 requests per hour
+    burst_limit=10,  # Max 10 requests per second
+    exclude_paths=["/docs", "/redoc", "/openapi.json", "/api/health", "/"],
 )
 
 

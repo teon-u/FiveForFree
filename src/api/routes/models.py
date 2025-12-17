@@ -132,13 +132,13 @@ async def get_model_performance(
             best_up_type, _ = model_manager.get_best_model(ticker, "up")
             best_up_model = best_up_type
         except ValueError:
-            pass
+            logger.debug(f"No best 'up' model found for {ticker}")
 
         try:
             best_down_type, _ = model_manager.get_best_model(ticker, "down")
             best_down_model = best_down_type
         except ValueError:
-            pass
+            logger.debug(f"No best 'down' model found for {ticker}")
 
         # Sort models by hit rate (descending)
         up_models.sort(key=lambda x: x.hit_rate_50h, reverse=True)
@@ -232,13 +232,13 @@ async def get_all_models_performance(
                     best_up_type, _ = model_manager.get_best_model(ticker, "up")
                     best_up_model = best_up_type
                 except ValueError:
-                    pass
+                    logger.debug(f"No best 'up' model found for {ticker}")
 
                 try:
                     best_down_type, _ = model_manager.get_best_model(ticker, "down")
                     best_down_model = best_down_type
                 except ValueError:
-                    pass
+                    logger.debug(f"No best 'down' model found for {ticker}")
 
                 # Sort models by hit rate
                 up_models.sort(key=lambda x: x.hit_rate_50h, reverse=True)

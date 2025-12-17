@@ -12,11 +12,14 @@ Generates 49 features across 7 categories:
 """
 
 from datetime import datetime, time
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 import warnings
+import hashlib
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 # Try to import talib, fallback to pandas implementation if not available
 try:
@@ -184,21 +187,80 @@ class FeatureEngineer:
 
     All features are computed using vectorized operations for performance.
     Handles missing data gracefully with forward-fill and fallback values.
+    Includes caching for repeated computations on same data.
     """
 
-    def __init__(self, market_open: time = time(9, 30), market_close: time = time(16, 0)):
+    def __init__(
+        self,
+        market_open: time = time(9, 30),
+        market_close: time = time(16, 0),
+        cache_size: int = 100,
+        cache_ttl_seconds: int = 60,
+    ):
         """
         Initialize feature engineer.
 
         Args:
             market_open: Market opening time (default 9:30 AM)
             market_close: Market closing time (default 4:00 PM)
+            cache_size: Maximum number of cached feature computations
+            cache_ttl_seconds: Time-to-live for cache entries in seconds
         """
         self.market_open = market_open
         self.market_close = market_close
+        self.cache_size = cache_size
+        self.cache_ttl_seconds = cache_ttl_seconds
+
+        # Feature cache: {hash: (features_df, timestamp)}
+        self._cache: Dict[str, Tuple[pd.DataFrame, float]] = {}
 
         # Option expiry dates (third Friday of each month)
         self.option_expiry_dates = self._generate_option_expiry_dates()
+
+    def _get_data_hash(self, df: pd.DataFrame, market_data: Optional[Dict]) -> str:
+        """Generate a hash key for caching based on input data."""
+        # Use last timestamp and shape for quick hash
+        hash_components = [
+            str(df.shape),
+            str(df['close'].iloc[-1]) if len(df) > 0 else "",
+            str(df['timestamp'].iloc[-1]) if 'timestamp' in df.columns and len(df) > 0 else "",
+        ]
+
+        if market_data:
+            hash_components.append(str(sorted(market_data.keys())))
+
+        return hashlib.md5("".join(hash_components).encode()).hexdigest()
+
+    def _get_from_cache(self, cache_key: str) -> Optional[pd.DataFrame]:
+        """Get cached features if valid."""
+        if cache_key not in self._cache:
+            return None
+
+        features_df, timestamp = self._cache[cache_key]
+        current_time = datetime.now().timestamp()
+
+        if current_time - timestamp > self.cache_ttl_seconds:
+            # Cache expired
+            del self._cache[cache_key]
+            return None
+
+        logger.debug(f"Feature cache hit for key {cache_key[:8]}...")
+        return features_df.copy()
+
+    def _add_to_cache(self, cache_key: str, features_df: pd.DataFrame) -> None:
+        """Add features to cache."""
+        # Evict oldest entries if cache is full
+        if len(self._cache) >= self.cache_size:
+            oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k][1])
+            del self._cache[oldest_key]
+
+        self._cache[cache_key] = (features_df.copy(), datetime.now().timestamp())
+        logger.debug(f"Cached features for key {cache_key[:8]}...")
+
+    def clear_cache(self) -> None:
+        """Clear the feature cache."""
+        self._cache.clear()
+        logger.debug("Feature cache cleared")
 
     def _generate_option_expiry_dates(self) -> set:
         """Generate option expiry dates for current year."""
@@ -224,7 +286,8 @@ class FeatureEngineer:
         self,
         df: pd.DataFrame,
         order_book: Optional[Dict] = None,
-        market_data: Optional[Dict] = None
+        market_data: Optional[Dict] = None,
+        use_cache: bool = True
     ) -> pd.DataFrame:
         """
         Compute all 49 features from minute bar data.
@@ -233,10 +296,18 @@ class FeatureEngineer:
             df: DataFrame with columns [timestamp, open, high, low, close, volume, vwap]
             order_book: Dict with order book data (optional)
             market_data: Dict with SPY, QQQ, VIX, sector data (optional)
+            use_cache: Whether to use feature caching (default True)
 
         Returns:
             DataFrame with all computed features
         """
+        # Check cache first
+        if use_cache:
+            cache_key = self._get_data_hash(df, market_data)
+            cached_result = self._get_from_cache(cache_key)
+            if cached_result is not None:
+                return cached_result
+
         df = df.copy()
 
         # Ensure required columns exist
@@ -272,6 +343,10 @@ class FeatureEngineer:
 
         # Fill any remaining NaN values
         df = self._handle_missing_values(df)
+
+        # Store in cache
+        if use_cache:
+            self._add_to_cache(cache_key, df)
 
         return df
 
