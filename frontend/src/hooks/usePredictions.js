@@ -42,5 +42,7 @@ function transformPrediction(pred) {
     best_model: pred.best_model,
     hit_rate: pred.hit_rate * 100, // Convert to percentage
     current_price: pred.current_price,
+    signal_rate: (pred.signal_rate || 0) * 100, // Convert to percentage
+    practicality_grade: pred.practicality_grade || 'D',
   }
 }

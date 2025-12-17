@@ -191,6 +191,13 @@ class GPUParallelTrainer:
             )
             results.update(hybrid_results)
 
+        # ===== Train Ensemble Models =====
+        logger.info(f"Training ensemble models for {ticker}")
+        ensemble_results = self._train_ensemble_models(
+            ticker, X_train, y_up_train, y_down_train, X_val, y_up_val, y_down_val
+        )
+        results.update(ensemble_results)
+
         # Save all trained models
         self.model_manager.save_models(ticker)
 
@@ -417,8 +424,8 @@ class GPUParallelTrainer:
             True if training succeeded, False otherwise
         """
         try:
-            # Get or create model
-            model = self.model_manager.get_or_create_model(ticker, model_type, target)
+            # Get or create model (returns tuple of model_type, model)
+            _, model = self.model_manager.get_or_create_model(ticker, model_type, target)
 
             # Train model
             model.train(X_train, y_train, X_val, y_val)
@@ -431,6 +438,75 @@ class GPUParallelTrainer:
         except Exception as e:
             logger.error(f"Training failed for {ticker} {model_type} ({target}): {e}")
             return False
+
+    def _train_ensemble_models(
+        self,
+        ticker: str,
+        X_train: np.ndarray,
+        y_up_train: np.ndarray,
+        y_down_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_up_val: Optional[np.ndarray] = None,
+        y_down_val: Optional[np.ndarray] = None
+    ) -> Dict[str, bool]:
+        """
+        Train ensemble models for a single ticker.
+
+        Uses the new multi-strategy ensemble architecture.
+
+        Args:
+            ticker: Stock ticker symbol
+            X_train: Training features
+            y_up_train: Training labels for 'up' target
+            y_down_train: Training labels for 'down' target
+            X_val: Validation features
+            y_up_val: Validation labels for 'up' target
+            y_down_val: Validation labels for 'down' target
+
+        Returns:
+            Dictionary mapping model keys to training success status
+        """
+        results = {}
+
+        # Train ensemble for 'up' target
+        try:
+            _, ensemble_up = self.model_manager.get_or_create_model(ticker, "ensemble", "up")
+            ensemble_up.train(X_train, y_up_train, X_val, y_up_val)
+            results["ensemble_up"] = True
+
+            # Log ensemble stats
+            stats = ensemble_up.get_ensemble_stats()
+            logger.info(
+                f"Ensemble 'up' for {ticker}: "
+                f"strategy={stats['strategy']}, "
+                f"base_models={stats['trained_base_models']}/{stats['total_base_models']}, "
+                f"best_model={stats.get('best_model', 'N/A')}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to train ensemble 'up' for {ticker}: {e}")
+            results["ensemble_up"] = False
+
+        # Train ensemble for 'down' target
+        try:
+            _, ensemble_down = self.model_manager.get_or_create_model(ticker, "ensemble", "down")
+            ensemble_down.train(X_train, y_down_train, X_val, y_down_val)
+            results["ensemble_down"] = True
+
+            # Log ensemble stats
+            stats = ensemble_down.get_ensemble_stats()
+            logger.info(
+                f"Ensemble 'down' for {ticker}: "
+                f"strategy={stats['strategy']}, "
+                f"base_models={stats['trained_base_models']}/{stats['total_base_models']}, "
+                f"best_model={stats.get('best_model', 'N/A')}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to train ensemble 'down' for {ticker}: {e}")
+            results["ensemble_down"] = False
+
+        return results
 
     def train_ensemble_models(
         self,
@@ -457,7 +533,7 @@ class GPUParallelTrainer:
 
             for target in targets:
                 try:
-                    model = self.model_manager.get_or_create_model(ticker, "ensemble", target)
+                    _, model = self.model_manager.get_or_create_model(ticker, "ensemble", target)
                     model.train(X_train, y_train, X_val, y_val)
                     results[f"{ticker}_ensemble_{target}"] = True
                     logger.info(f"Trained ensemble for {ticker} ({target})")

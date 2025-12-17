@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "NASDAQ Predictor",
+    "live": "Live",
+    "disconnected": "Disconnected",
+    "settings": "Settings",
+    "footer": "Real-time predictions using 5 ML models | Data from Polygon.io | Updates every minute"
+  },
+  "dashboard": {
+    "gainers": "Gainers",
+    "volume": "Volume",
+    "gainersTop100": "Gainers Top 100",
+    "volumeTop100": "Volume Top 100",
+    "tickers": "tickers",
+    "loading": "Loading predictions...",
+    "error": "Error Loading Data",
+    "noData": "No predictions available"
+  },
+  "tickerCard": {
+    "model": "Model",
+    "precision": "Precision",
+    "signal": "Signal",
+    "chart": "Chart",
+    "details": "Details"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "korean": "한국어",
+    "english": "English",
+    "threshold": "Probability Threshold",
+    "filter": "Filter",
+    "filterAll": "All",
+    "filterUp": "Up Only",
+    "filterDown": "Down Only",
+    "close": "Close"
+  },
+  "grade": {
+    "excellent": "Excellent",
+    "good": "Good",
+    "lowSignal": "Low Signal",
+    "notPractical": "Not Practical"
+  },
+  "direction": {
+    "up": "UP",
+    "down": "DOWN"
+  }
+}

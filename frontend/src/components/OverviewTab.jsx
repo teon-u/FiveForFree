@@ -41,6 +41,33 @@ export default function OverviewTab({ data, ticker }) {
     return names[name] || name.toUpperCase()
   }
 
+  // Practicality Grade styling
+  const getGradeStyle = (grade) => {
+    switch (grade) {
+      case 'A':
+        return 'text-green-400 bg-green-400/20 border-green-400/40'
+      case 'B':
+        return 'text-blue-400 bg-blue-400/20 border-blue-400/40'
+      case 'C':
+        return 'text-yellow-400 bg-yellow-400/20 border-yellow-400/40'
+      default:
+        return 'text-red-400 bg-red-400/20 border-red-400/40'
+    }
+  }
+
+  const getGradeLabel = (grade) => {
+    switch (grade) {
+      case 'A':
+        return 'Excellent'
+      case 'B':
+        return 'Good'
+      case 'C':
+        return 'Low Signal'
+      default:
+        return 'Not Practical'
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Current Prediction */}
@@ -86,47 +113,80 @@ export default function OverviewTab({ data, ticker }) {
       <section>
         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
           <span className="mr-2">🏆</span>
-          Model Ranking (50h Hit Rate)
+          Model Ranking (Precision + Signal Rate)
         </h3>
         <div className="bg-surface-light rounded-lg p-6 border border-surface-lighter">
-          <div className="space-y-3">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-2 text-xs text-gray-400 mb-3 px-2">
+            <div className="col-span-1">#</div>
+            <div className="col-span-3">Model</div>
+            <div className="col-span-2 text-right">Precision</div>
+            <div className="col-span-2 text-right">Signal Rate</div>
+            <div className="col-span-2 text-right">Signals</div>
+            <div className="col-span-2 text-center">Grade</div>
+          </div>
+          <div className="space-y-2">
             {ranking && ranking.length > 0 ? (
               ranking.map((model, index) => (
-                <div key={model.model} className="flex items-center">
-                  <div className="w-8 text-center">
+                <div key={model.model} className="grid grid-cols-12 gap-2 items-center bg-surface rounded-lg p-2">
+                  <div className="col-span-1 text-center">
                     <span className={`text-lg font-bold ${
                       index === 0 ? 'text-yellow-400' :
                       index === 1 ? 'text-gray-300' :
                       index === 2 ? 'text-orange-400' :
                       'text-gray-500'
                     }`}>
-                      {index + 1}.
+                      {index + 1}
                     </span>
                   </div>
-                  <div className="flex-1 ml-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-white font-medium">
-                        {formatModelName(model.model)}
-                      </span>
-                      <span className="text-gray-300 font-semibold">
-                        {(model.hit_rate * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${
-                          index === 0 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
-                          'bg-gradient-to-r from-blue-500 to-purple-500'
-                        }`}
-                        style={{ width: `${model.hit_rate * 100}%` }}
-                      />
-                    </div>
+                  <div className="col-span-3">
+                    <span className="text-white font-medium">
+                      {formatModelName(model.model)}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className={`font-semibold ${
+                      model.hit_rate >= 0.5 ? 'text-green-400' :
+                      model.hit_rate >= 0.3 ? 'text-blue-400' :
+                      'text-gray-400'
+                    }`}>
+                      {(model.hit_rate * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className={`font-semibold ${
+                      (model.signal_rate || 0) >= 0.1 ? 'text-green-400' :
+                      (model.signal_rate || 0) >= 0.05 ? 'text-yellow-400' :
+                      'text-red-400'
+                    }`}>
+                      {((model.signal_rate || 0) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className="text-gray-300">
+                      {model.signal_count || 0}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-center">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold border ${getGradeStyle(model.practicality_grade || 'D')}`}>
+                      {model.practicality_grade || 'D'}
+                    </span>
                   </div>
                 </div>
               ))
             ) : (
               <p className="text-gray-400 text-center py-4">No model data available</p>
             )}
+          </div>
+          {/* Legend */}
+          <div className="mt-4 pt-4 border-t border-surface-lighter">
+            <p className="text-xs text-gray-400">
+              <span className="font-semibold">Grade: </span>
+              <span className="text-green-400">A</span>=Precision≥50% & Signal≥10% |
+              <span className="text-blue-400 ml-1">B</span>=Precision≥30% & Signal≥10% |
+              <span className="text-yellow-400 ml-1">C</span>=Precision≥30% but low signal |
+              <span className="text-red-400 ml-1">D</span>=Not practical
+            </p>
           </div>
         </div>
       </section>

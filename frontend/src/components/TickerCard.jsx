@@ -8,6 +8,8 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
     change_percent,
     best_model,
     hit_rate,
+    signal_rate,
+    practicality_grade,
   } = prediction
 
   // Determine card style based on probability and direction
@@ -33,6 +35,20 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
       'ensemble': 'ENS'
     }
     return shortNames[modelName] || modelName.toUpperCase()
+  }
+
+  // Practicality Grade styling
+  const getGradeStyle = (grade) => {
+    switch (grade) {
+      case 'A':
+        return 'text-green-400 bg-green-400/20 border-green-400/40'
+      case 'B':
+        return 'text-blue-400 bg-blue-400/20 border-blue-400/40'
+      case 'C':
+        return 'text-yellow-400 bg-yellow-400/20 border-yellow-400/40'
+      default:
+        return 'text-red-400 bg-red-400/20 border-red-400/40'
+    }
   }
 
   return (
@@ -66,14 +82,25 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
       <div className="text-xs text-gray-400 space-y-1 mb-3">
         <div className="flex items-center justify-between">
           <span>Model:</span>
-          <span className="font-semibold text-gray-300">
-            {formatModelName(best_model)}
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-gray-300">
+              {formatModelName(best_model)}
+            </span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getGradeStyle(practicality_grade)}`}>
+              {practicality_grade}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span>Precision:</span>
+          <span className={`font-semibold ${hit_rate >= 50 ? 'text-green-400' : hit_rate >= 30 ? 'text-blue-400' : 'text-gray-400'}`}>
+            {hit_rate.toFixed(0)}%
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span>Hit Rate:</span>
-          <span className="font-semibold text-gray-300">
-            {hit_rate.toFixed(0)}%
+          <span>Signal:</span>
+          <span className={`font-semibold ${signal_rate >= 10 ? 'text-green-400' : signal_rate >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {signal_rate.toFixed(0)}%
           </span>
         </div>
       </div>

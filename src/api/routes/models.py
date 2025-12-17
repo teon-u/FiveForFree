@@ -25,7 +25,11 @@ class ModelPerformanceMetrics(BaseModel):
     model_type: str = Field(..., description="Model type (xgboost, lightgbm, lstm, transformer, ensemble)")
     target: str = Field(..., description="Prediction target (up or down)")
     hit_rate_50h: float = Field(..., description="50-hour hit rate percentage")
+    precision: float = Field(0.0, description="Precision (TP / (TP + FP))")
+    signal_rate: float = Field(0.0, description="Signal rate (signals / total opportunities)")
+    practicality_grade: str = Field("D", description="Practicality grade (A/B/C/D)")
     total_predictions: int = Field(..., description="Total predictions made")
+    signal_count: int = Field(0, description="Number of buy signals")
     is_trained: bool = Field(..., description="Whether model is trained")
     last_trained: Optional[str] = Field(None, description="Last training timestamp")
 
@@ -103,7 +107,11 @@ async def get_model_performance(
                         model_type=model_type,
                         target="up",
                         hit_rate_50h=metrics["hit_rate_50h"],
+                        precision=metrics.get("precision", 0.0),
+                        signal_rate=metrics.get("signal_rate", 0.0),
+                        practicality_grade=metrics.get("practicality_grade", "D"),
                         total_predictions=metrics["total_predictions"],
+                        signal_count=metrics.get("signal_count", 0),
                         is_trained=metrics["is_trained"],
                         last_trained=metrics["last_trained"],
                     )
@@ -118,7 +126,11 @@ async def get_model_performance(
                         model_type=model_type,
                         target="down",
                         hit_rate_50h=metrics["hit_rate_50h"],
+                        precision=metrics.get("precision", 0.0),
+                        signal_rate=metrics.get("signal_rate", 0.0),
+                        practicality_grade=metrics.get("practicality_grade", "D"),
                         total_predictions=metrics["total_predictions"],
+                        signal_count=metrics.get("signal_count", 0),
                         is_trained=metrics["is_trained"],
                         last_trained=metrics["last_trained"],
                     )
@@ -203,7 +215,11 @@ async def get_all_models_performance(
                                 model_type=model_type,
                                 target="up",
                                 hit_rate_50h=metrics["hit_rate_50h"],
+                                precision=metrics.get("precision", 0.0),
+                                signal_rate=metrics.get("signal_rate", 0.0),
+                                practicality_grade=metrics.get("practicality_grade", "D"),
                                 total_predictions=metrics["total_predictions"],
+                                signal_count=metrics.get("signal_count", 0),
                                 is_trained=metrics["is_trained"],
                                 last_trained=metrics["last_trained"],
                             )
@@ -218,7 +234,11 @@ async def get_all_models_performance(
                                 model_type=model_type,
                                 target="down",
                                 hit_rate_50h=metrics["hit_rate_50h"],
+                                precision=metrics.get("precision", 0.0),
+                                signal_rate=metrics.get("signal_rate", 0.0),
+                                practicality_grade=metrics.get("practicality_grade", "D"),
                                 total_predictions=metrics["total_predictions"],
+                                signal_count=metrics.get("signal_count", 0),
                                 is_trained=metrics["is_trained"],
                                 last_trained=metrics["last_trained"],
                             )
@@ -474,7 +494,7 @@ async def get_model_overview(
         else:
             risk_level = "high"
 
-        # Build ranking
+        # Build ranking with signal_rate and practicality_grade
         performances = model_manager.get_model_performances(ticker)
         ranking = []
 
@@ -482,7 +502,11 @@ async def get_model_overview(
             for model_type, metrics in performances["up"].items():
                 ranking.append({
                     "model": model_type,
-                    "hit_rate": metrics["hit_rate_50h"] / 100.0
+                    "hit_rate": metrics["hit_rate_50h"] / 100.0,
+                    "precision": metrics.get("precision", 0.0),
+                    "signal_rate": metrics.get("signal_rate", 0.0),
+                    "signal_count": metrics.get("signal_count", 0),
+                    "practicality_grade": metrics.get("practicality_grade", "D")
                 })
 
         ranking.sort(key=lambda x: x["hit_rate"], reverse=True)

@@ -503,15 +503,170 @@ final_up: 0.65, final_down: 0.55, total: 1.20
 
 ---
 
-## 13. 변경 이력
+## 13. Multi-Strategy Ensemble Model (NEW)
+
+### 13.1 개요
+
+기존 단일 앙상블 방식을 개선하여 **다중 전략 앙상블**을 구현했습니다.
+
+```
+이전 방식:
+- Stacking with LogisticRegression meta-learner
+
+새로운 방식:
+- Precision-Weighted Voting
+- Stacking with XGBoost meta-learner
+- Dynamic Model Selection
+- Hybrid (3가지 전략 결합)
+```
+
+### 13.2 앙상블 전략 (EnsembleStrategy)
+
+```python
+from src.models.ensemble_model import EnsembleStrategy
+
+# 사용 가능한 전략
+EnsembleStrategy.PRECISION_WEIGHTED  # Precision 기반 가중 투표
+EnsembleStrategy.STACKING            # XGBoost 메타 러너 스태킹
+EnsembleStrategy.DYNAMIC_SELECTION   # 최고 성능 모델 선택
+EnsembleStrategy.HYBRID              # 3가지 전략 결합 (기본값)
+```
+
+### 13.3 전략별 설명
+
+#### A. Precision-Weighted Voting
+
+각 모델의 **Precision**(정밀도)에 따라 가중치를 부여합니다.
+
+```python
+# Breakeven Precision (30%)를 초과하는 정도로 가중치 계산
+weight = max(0, precision - BREAKEVEN_PRECISION)
+
+# 예시: XGBoost=37.5%, LightGBM=32%, LSTM=28%
+# weights: XGBoost=0.075, LightGBM=0.02, LSTM=0 (미달)
+# 정규화 후: XGBoost=78.9%, LightGBM=21.1%
+```
+
+**장점**: 실제 수익성과 직결된 가중치
+**적합 상황**: Precision이 뚜렷하게 차이날 때
+
+#### B. Stacking with XGBoost
+
+베이스 모델의 예측을 입력으로 XGBoost 메타 러너가 최종 예측합니다.
+
+```python
+# 메타 러너 설정
+XGBClassifier(
+    n_estimators=50,
+    max_depth=3,
+    learning_rate=0.1,
+    objective='binary:logistic'
+)
+```
+
+**장점**: 비선형 결합으로 복잡한 패턴 포착
+**적합 상황**: 모델 간 상호작용이 중요할 때
+
+#### C. Dynamic Model Selection
+
+가장 Precision이 높은 **단일 모델**만 사용합니다.
+
+```python
+# 50시간 기준 Precision이 가장 높은 모델 선택
+best_model = max(models, key=lambda m: m.get_precision_at_threshold())
+```
+
+**장점**: 단순하고 빠름, 최고 모델의 성능 유지
+**적합 상황**: 특정 모델이 압도적으로 우수할 때
+
+#### D. Hybrid (기본값)
+
+세 가지 전략을 가중 결합합니다.
+
+```python
+# 기본 가중치
+strategy_weights = {
+    'precision_weighted': 0.4,  # 40%
+    'stacking': 0.4,            # 40%
+    'dynamic_selection': 0.2    # 20%
+}
+
+final_prob = (
+    0.4 * precision_weighted_prob +
+    0.4 * stacking_prob +
+    0.2 * dynamic_selection_prob
+)
+```
+
+### 13.4 사용 예시
+
+```python
+from src.models.model_manager import ModelManager
+from src.models.ensemble_model import EnsembleModel, EnsembleStrategy
+
+# ModelManager 초기화 및 모델 로드
+mm = ModelManager()
+mm.load_all_models()
+
+# 앙상블 모델 생성 (기본: HYBRID)
+_, ensemble = mm.get_or_create_model('AAPL', 'ensemble', 'up')
+
+# 전략 변경
+ensemble.set_strategy(EnsembleStrategy.PRECISION_WEIGHTED)
+
+# Hybrid 전략 가중치 조정
+ensemble.set_strategy_weights({
+    'precision_weighted': 0.5,
+    'stacking': 0.3,
+    'dynamic_selection': 0.2
+})
+
+# 앙상블 통계 확인
+stats = ensemble.get_ensemble_stats()
+print(f"Strategy: {stats['strategy']}")
+print(f"Best model: {stats['best_model']}")
+print(f"Precision weights: {stats['precision_weights']}")
+```
+
+### 13.5 학습 흐름
+
+```python
+# GPU Trainer가 자동으로 앙상블도 학습
+trainer = GPUParallelTrainer(model_manager)
+results = trainer.train_single_ticker(
+    ticker='AAPL',
+    X=features,
+    y_up=labels_up,
+    y_down=labels_down
+)
+
+# 결과에 ensemble_up, ensemble_down 포함
+print(results)
+# {'xgboost_up': True, 'lightgbm_up': True, ..., 'ensemble_up': True, 'ensemble_down': True}
+```
+
+### 13.6 성능 비교
+
+| 전략 | 장점 | 단점 | 권장 상황 |
+|------|------|------|----------|
+| Precision-Weighted | 수익성 직결 | 히스토리 필요 | Precision 차이 클 때 |
+| Stacking | 비선형 결합 | 과적합 위험 | 충분한 데이터 있을 때 |
+| Dynamic Selection | 단순/빠름 | 단일 모델 의존 | 최고 모델이 안정적일 때 |
+| Hybrid (기본) | 균형/안정 | 약간 복잡 | 대부분의 경우 |
+
+---
+
+## 14. 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-12-17 | 2.0 | Multi-Strategy Ensemble 추가 |
+| 2025-12-17 | 1.1 | Precision 기반 메트릭으로 변경 (Hit Rate -> Precision) |
 | 2025-12-15 | 1.0 | 하이브리드-앙상블 구조 초기 구현 |
 
 ---
 
-## 14. 참고 자료
+## 15. 참고 자료
 
 - 클래스 불균형 처리: SMOTE, Undersampling, Class Weights
 - 확률 캘리브레이션: Platt Scaling, Isotonic Regression

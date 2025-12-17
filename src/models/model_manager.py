@@ -68,11 +68,11 @@ class ModelManager:
             # Load models for this ticker
             for model_file in ticker_dir.glob("*.pkl"):
                 try:
-                    # Parse filename: {model_type}_{target}.pkl
+                    # Parse filename: {target}_{model_type}.pkl (e.g., down_lightgbm.pkl)
                     parts = model_file.stem.split('_')
                     if len(parts) >= 2:
-                        model_type = parts[0]
-                        target = parts[1]
+                        target = parts[0]      # First part is target (up/down)
+                        model_type = parts[1]  # Second part is model type
 
                         if model_type not in self._models[ticker]:
                             self._models[ticker][model_type] = {}
@@ -80,6 +80,10 @@ class ModelManager:
                         # Load the model
                         with open(model_file, 'rb') as f:
                             model = pickle.load(f)
+
+                        # Handle legacy pickle files that saved as 'model' instead of '_model'
+                        if hasattr(model, 'model') and not hasattr(model, '_model'):
+                            model._model = model.model
 
                         self._models[ticker][model_type][target] = model
                         loaded_count += 1
@@ -108,7 +112,8 @@ class ModelManager:
         ticker_dir = self.models_path / ticker
         ticker_dir.mkdir(parents=True, exist_ok=True)
 
-        model_path = ticker_dir / f"{model_type}_{target}.pkl"
+        # Use {target}_{model_type}.pkl to match existing file naming convention
+        model_path = ticker_dir / f"{target}_{model_type}.pkl"
 
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
@@ -249,7 +254,12 @@ class ModelManager:
                 stats = model.get_prediction_stats(hours=settings.BACKTEST_HOURS)
 
                 performances[target][model_type] = {
-                    'hit_rate_50h': stats['accuracy'] * 100,
+                    'hit_rate_50h': stats['precision'] * 100,  # Precision as percentage
+                    'precision': stats['precision'],
+                    'recall': stats['recall'],
+                    'signal_rate': stats.get('signal_rate', 0.0),
+                    'signal_count': stats.get('signal_count', 0),
+                    'practicality_grade': stats.get('practicality_grade', 'D'),
                     'total_predictions': stats['total_predictions'],
                     'is_trained': model.is_trained,
                     'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None

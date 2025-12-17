@@ -363,6 +363,86 @@ async def broadcast_predictions(
         await asyncio.sleep(interval_seconds)
 
 
+async def broadcast_price_updates(
+    tickers: List[str],
+    interval_seconds: int = 15,
+) -> None:
+    """
+    Broadcast real-time price updates to all connected clients.
+
+    Fetches current prices from Yahoo Finance and broadcasts to subscribers.
+    Runs more frequently than prediction updates for real-time price tracking.
+
+    Args:
+        tickers: List of ticker symbols to track
+        interval_seconds: Interval between price updates (default: 15 seconds)
+    """
+    import yfinance as yf
+    import math
+
+    logger.info(f"Starting price update broadcast task (interval: {interval_seconds}s)")
+
+    while True:
+        try:
+            if manager.active_connections and tickers:
+                # Batch fetch current prices
+                data = yf.download(
+                    tickers=tickers[:50],  # Limit for performance
+                    period="1d",
+                    interval="1m",
+                    progress=False,
+                    group_by='ticker',
+                    threads=True
+                )
+
+                if not data.empty:
+                    price_updates = []
+
+                    for ticker in tickers[:50]:
+                        try:
+                            if len(tickers) > 1:
+                                ticker_data = data[ticker] if ticker in data.columns.get_level_values(0) else None
+                            else:
+                                ticker_data = data
+
+                            if ticker_data is not None and not ticker_data.empty:
+                                latest = ticker_data.iloc[-1]
+                                current_price = float(latest['Close'])
+
+                                # Calculate change from open
+                                open_price = float(ticker_data.iloc[0]['Open'])
+                                if open_price > 0 and not math.isnan(open_price) and not math.isnan(current_price):
+                                    change_percent = ((current_price - open_price) / open_price) * 100
+                                else:
+                                    change_percent = 0.0
+
+                                price_updates.append({
+                                    "ticker": ticker,
+                                    "price": round(current_price, 2),
+                                    "change_percent": round(change_percent, 2),
+                                })
+
+                        except Exception as e:
+                            logger.debug(f"Error getting price for {ticker}: {e}")
+                            continue
+
+                    if price_updates:
+                        # Broadcast price update to all clients
+                        await manager.broadcast({
+                            "type": "price_update",
+                            "prices": price_updates,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
+
+                        logger.debug(f"Broadcast price updates for {len(price_updates)} tickers")
+
+        except Exception as e:
+            logger.error(f"Error in price update broadcast: {e}")
+
+        # Wait for next interval
+        await asyncio.sleep(interval_seconds)
+
+
 async def send_heartbeat(interval_seconds: int = 30) -> None:
     """
     Send periodic heartbeat messages to all connected clients.

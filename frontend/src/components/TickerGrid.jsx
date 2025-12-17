@@ -11,24 +11,18 @@ export default function TickerGrid({ predictions, onTickerClick, onDetailClick }
   }
 
   return (
-    <div className="relative">
-      {/* Horizontal scroll container */}
-      <div className="overflow-x-auto custom-scrollbar pb-4">
-        <div className="inline-flex gap-4 min-w-full">
-          {predictions.map((prediction) => (
-            <div key={prediction.ticker} className="flex-shrink-0 w-48">
-              <TickerCard
-                prediction={prediction}
-                onClick={onTickerClick}
-                onDetailClick={onDetailClick}
-              />
-            </div>
-          ))}
-        </div>
+    <div className="ticker-grid-container">
+      {/* Vertical scroll grid - 4 columns minimum, responsive */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        {predictions.map((prediction) => (
+          <TickerCard
+            key={prediction.ticker}
+            prediction={prediction}
+            onClick={onTickerClick}
+            onDetailClick={onDetailClick}
+          />
+        ))}
       </div>
-
-      {/* Scroll indicators */}
-      <div className="absolute right-0 top-0 bottom-4 w-16 bg-gradient-to-l from-background to-transparent pointer-events-none" />
     </div>
   )
 }

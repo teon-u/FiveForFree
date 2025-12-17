@@ -15,10 +15,12 @@ from src.api.routes import (
     models_router,
     health_router,
 )
+from src.api.routes.status import router as status_router
 from src.api.middleware import RateLimitMiddleware
 from src.api.websocket import (
     handle_websocket_connection,
     broadcast_predictions,
+    broadcast_price_updates,
     send_heartbeat,
 )
 from src.api.dependencies import (
@@ -95,6 +97,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         background_tasks.add(heartbeat_task)
         heartbeat_task.add_done_callback(background_tasks.discard)
 
+        # Start price update broadcast task (every 15 seconds)
+        price_update_task = asyncio.create_task(
+            broadcast_price_updates(
+                tickers=active_tickers,
+                interval_seconds=15,
+            )
+        )
+        background_tasks.add(price_update_task)
+        price_update_task.add_done_callback(background_tasks.discard)
+
         logger.info(f"API started successfully on {app_settings.API_HOST}:{app_settings.API_PORT}")
         logger.info(f"Broadcasting predictions for: {', '.join(active_tickers)}")
 
@@ -155,6 +167,7 @@ app.include_router(health_router)
 app.include_router(predictions_router)
 app.include_router(tickers_router)
 app.include_router(models_router)
+app.include_router(status_router)
 
 
 # Root endpoint
@@ -176,6 +189,7 @@ async def root() -> JSONResponse:
                 "predictions": "/api/predictions",
                 "tickers": "/api/tickers",
                 "models": "/api/models",
+                "status": "/api/status",
                 "websocket": "/ws",
                 "docs": "/docs",
                 "redoc": "/redoc",

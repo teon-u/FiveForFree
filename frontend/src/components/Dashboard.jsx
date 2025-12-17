@@ -4,13 +4,15 @@ import PredictionPanel from './PredictionPanel'
 import ModelDetailModal from './ModelDetailModal'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
+import { t } from '../i18n'
 
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState(null)
   const [detailModalTicker, setDetailModalTicker] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('volume') // 'volume' or 'gainers'
+  const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume' (default: gainers)
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
-  const { filterMode } = useSettingsStore()
+  const { filterMode, language } = useSettingsStore()
+  const tr = t(language)
 
   // Filter predictions based on settings
   const filterPredictions = (predictions) => {
@@ -27,23 +29,35 @@ export default function Dashboard() {
   const filteredVolumeTop100 = filterPredictions(volumeTop100)
   const filteredGainersTop100 = filterPredictions(gainersTop100)
 
-  // Get currently active predictions based on toggle
-  const activePredictions = activeCategory === 'volume'
-    ? filteredVolumeTop100
-    : filteredGainersTop100
+  // Sort predictions based on category
+  const sortPredictions = (predictions, category) => {
+    if (!predictions) return []
+    return [...predictions].sort((a, b) => {
+      if (category === 'gainers') {
+        return b.change_percent - a.change_percent // Sort by gain descending
+      } else {
+        return b.probability - a.probability // Sort by probability for volume
+      }
+    })
+  }
 
-  const categoryTitle = activeCategory === 'volume'
-    ? 'Volume Top 100'
-    : 'Gainers Top 100'
+  // Get currently active predictions based on toggle (sorted)
+  const activePredictions = activeCategory === 'gainers'
+    ? sortPredictions(filteredGainersTop100, 'gainers')
+    : sortPredictions(filteredVolumeTop100, 'volume')
 
-  const categoryIcon = activeCategory === 'volume' ? '📊' : '📈'
+  const categoryTitle = activeCategory === 'gainers'
+    ? tr('dashboard.gainersTop100')
+    : tr('dashboard.volumeTop100')
+
+  const categoryIcon = activeCategory === 'gainers' ? '📈' : '📊'
 
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold mb-2">Error Loading Data</h2>
+          <h2 className="text-2xl font-bold mb-2">{tr('dashboard.error')}</h2>
           <p className="text-gray-400">{error.message}</p>
         </div>
       </div>
@@ -55,7 +69,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="spinner mx-auto mb-4" />
-          <p className="text-gray-400">Loading predictions...</p>
+          <p className="text-gray-400">{tr('dashboard.loading')}</p>
         </div>
       </div>
     )
@@ -66,23 +80,6 @@ export default function Dashboard() {
       {/* Category Toggle Button */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg bg-gray-800 p-1 gap-1">
-          <button
-            onClick={() => setActiveCategory('volume')}
-            className={`
-              px-6 py-2.5 rounded-lg font-medium transition-all duration-200
-              flex items-center gap-2
-              ${activeCategory === 'volume'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }
-            `}
-          >
-            <span className="text-lg">📊</span>
-            거래량
-            <span className="text-xs opacity-75">
-              ({filteredVolumeTop100?.length || 0})
-            </span>
-          </button>
           <button
             onClick={() => setActiveCategory('gainers')}
             className={`
@@ -95,9 +92,26 @@ export default function Dashboard() {
             `}
           >
             <span className="text-lg">📈</span>
-            상승률
+            {tr('dashboard.gainers')}
             <span className="text-xs opacity-75">
               ({filteredGainersTop100?.length || 0})
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveCategory('volume')}
+            className={`
+              px-6 py-2.5 rounded-lg font-medium transition-all duration-200
+              flex items-center gap-2
+              ${activeCategory === 'volume'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50'
+                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }
+            `}
+          >
+            <span className="text-lg">📊</span>
+            {tr('dashboard.volume')}
+            <span className="text-xs opacity-75">
+              ({filteredVolumeTop100?.length || 0})
             </span>
           </button>
         </div>
@@ -110,7 +124,7 @@ export default function Dashboard() {
             <span className="text-2xl">{categoryIcon}</span>
             {categoryTitle}
             <span className="text-sm text-gray-400 font-normal">
-              ({activePredictions?.length || 0} tickers)
+              ({activePredictions?.length || 0} {tr('dashboard.tickers')})
             </span>
           </h2>
         </div>

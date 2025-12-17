@@ -1,6 +1,14 @@
 # Claude Code Custom Commands
 
-This directory contains 7 specialized sub-agents (slash commands) for the NASDAQ Prediction System project.
+This directory contains 9 specialized sub-agents (slash commands) for the NASDAQ Prediction System project.
+
+## Key Metrics Update (2025-12-17)
+
+**IMPORTANT: Use Precision instead of Accuracy/Hit Rate**
+- **Precision** = TP / (TP + FP) - When model predicts UP, how often is it correct?
+- Current best model Precision: ~37.5%
+- Breakeven Precision for 3:1 R/R strategy: 30%
+- Status: **PROFITABLE** with proper risk management
 
 ## Available Commands
 
@@ -112,6 +120,48 @@ Please review: src/models/ensemble_model.py
 Focus on: error handling and performance
 ```
 
+### 8. `/backtest` - Backtest Simulation (NEW)
+**Purpose:** Run trading simulations and calculate expected returns
+**Use Cases:**
+- Simulate trading based on model predictions
+- Calculate expected annual returns
+- Test different risk/reward strategies
+- Analyze win rate and drawdown
+- Project profitability
+
+**Example:**
+```
+/backtest
+
+Strategy: 3:1 Reward/Risk
+Target: +3%, Stop: -1%
+Capital: $10,000
+```
+
+**Key Outputs:**
+- Total trades and win rate
+- Target hit vs stop loss ratio
+- Total and average P&L
+- Sharpe ratio and max drawdown
+- Annual return projection
+
+### 9. `/ui-test` - Frontend UI Testing (NEW)
+**Purpose:** Test frontend UI using Playwright browser automation
+**Use Cases:**
+- Automated browser testing
+- Test tab navigation and modals
+- Verify ticker cards display correctly
+- Test model detail and chart modals
+- Check Precision displays (not Hit Rate!)
+
+**Example:**
+```
+/ui-test
+
+Focus: Test model detail modal for BIIB
+Check: Precision values in ranking table
+```
+
 ## How to Use
 
 ### Basic Usage
@@ -141,9 +191,13 @@ Use multiple commands in sequence:
 ## Command Categories
 
 ### 🧪 Testing & Validation
-- `/model-test` - Test ML models
+- `/model-test` - Test ML models (Precision-focused)
 - `/api-test` - Test API endpoints
 - `/data-check` - Validate data quality
+- `/ui-test` - Frontend UI testing (Playwright)
+
+### 📊 Trading & Analysis
+- `/backtest` - Run trading simulations
 
 ### 🐛 Debugging & Troubleshooting
 - `/debug-model` - Debug ML model issues
@@ -226,6 +280,13 @@ If a command isn't working as expected:
 
 ---
 
-**Last Updated:** 2025-12-15
+**Last Updated:** 2025-12-17
 **Project:** NASDAQ Short-Term Volatility Prediction System
-**Total Commands:** 7
+**Total Commands:** 9
+
+## Recent Updates
+
+- **2025-12-17**: Added `/ui-test` command for Playwright browser testing
+- **2025-12-17**: Added `/backtest` command for trading simulations
+- **2025-12-17**: Updated `/model-test` to focus on Precision metrics
+- **2025-12-17**: Changed from Hit Rate/Accuracy to Precision for meaningful model evaluation
