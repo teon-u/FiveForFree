@@ -8,6 +8,8 @@ import pandas as pd
 import pickle
 from loguru import logger
 
+from config.settings import settings
+
 
 class BaseModel(ABC):
     """
@@ -95,6 +97,20 @@ class BaseModel(ABC):
             path: Directory path to load model from
         """
         pass
+
+    def _update_last_trained(self, n_samples: Optional[int] = None) -> None:
+        """
+        Update the last trained timestamp and optionally sample count.
+
+        Should be called at the end of train() in all child classes.
+
+        Args:
+            n_samples: Number of samples used for training (optional)
+        """
+        self.last_trained_at = datetime.now()
+        if n_samples is not None:
+            self.training_samples = n_samples
+        logger.debug(f"{self.model_type} model for {self.ticker}/{self.target} trained at {self.last_trained_at}")
 
     def incremental_train(self, X_new: np.ndarray, y_new: np.ndarray) -> None:
         """
@@ -590,11 +606,10 @@ class BaseModel(ABC):
         # Sort by timestamp
         recent = sorted(recent, key=lambda x: x['timestamp'])
 
-        # Simulate trades with realistic returns
-        # Win: +5% (target), Loss: -2% (stop or time limit)
-        target_return = 5.0
-        loss_return = -2.0
-        commission = 0.2  # 0.2% round-trip
+        # Simulate trades with realistic returns from settings
+        target_return = settings.TARGET_PERCENT
+        loss_return = -2.0  # Conservative loss assumption for time-limit exits
+        commission = settings.COMMISSION_PERCENT * 2  # Round-trip
 
         equity_curve = [{'timestamp': recent[0]['timestamp'].isoformat(), 'equity': 100.0}]
         current_equity = 100.0

@@ -10,6 +10,14 @@ from loguru import logger
 
 from src.collector.finnhub_client import get_finnhub_client, FinnhubClientWrapper
 
+# Try to import yfinance for volume data (Finnhub doesn't provide volume in quotes)
+try:
+    import yfinance as yf
+    HAS_YFINANCE = True
+except ImportError:
+    HAS_YFINANCE = False
+    logger.warning("yfinance not installed. Volume data will not be available.")
+
 
 class SectorETF(Enum):
     """Major sector ETFs for market context (limited to 6 for API quota)."""
@@ -136,7 +144,51 @@ class MarketContextCollector:
             client: Finnhub client wrapper (uses global if not provided)
         """
         self.client = client or get_finnhub_client()
+        self._volume_cache: Dict[str, tuple] = {}  # Cache: symbol -> (volume, timestamp)
+        self._volume_cache_ttl = 60  # Cache TTL in seconds
         logger.info("MarketContextCollector initialized with Finnhub")
+
+    def _get_volume_from_yfinance(self, symbol: str) -> float:
+        """
+        Get current day's trading volume from yfinance.
+
+        Args:
+            symbol: Ticker symbol
+
+        Returns:
+            Trading volume or 0.0 if unavailable
+        """
+        if not HAS_YFINANCE:
+            return 0.0
+
+        try:
+            # Check cache first
+            now = datetime.now()
+            if symbol in self._volume_cache:
+                cached_volume, cached_time = self._volume_cache[symbol]
+                if (now - cached_time).seconds < self._volume_cache_ttl:
+                    return cached_volume
+
+            # Fetch from yfinance (get last 1 day of data)
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1d")
+
+            if hist.empty:
+                logger.debug(f"No volume data from yfinance for {symbol}")
+                return 0.0
+
+            # Get the latest volume
+            volume = float(hist['Volume'].iloc[-1])
+
+            # Cache the result
+            self._volume_cache[symbol] = (volume, now)
+
+            logger.debug(f"Got volume from yfinance for {symbol}: {volume:,.0f}")
+            return volume
+
+        except Exception as e:
+            logger.debug(f"Failed to get volume from yfinance for {symbol}: {e}")
+            return 0.0
 
     def get_market_indicator(self, symbol: str) -> Optional[MarketIndicator]:
         """
@@ -174,12 +226,15 @@ class MarketContextCollector:
             else:
                 change_percent = 0.0
 
+            # Get volume from yfinance (Finnhub quote doesn't provide volume)
+            volume = self._get_volume_from_yfinance(symbol)
+
             indicator = MarketIndicator(
                 symbol=symbol,
                 timestamp=datetime.fromtimestamp(timestamp) if timestamp else datetime.now(),
                 price=float(current_price),
                 change_percent=float(change_percent),
-                volume=0.0,  # Volume not provided in Finnhub quote endpoint
+                volume=volume,
                 prev_close=float(prev_close)
             )
 

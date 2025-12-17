@@ -137,7 +137,8 @@ class IncrementalTrainer:
         ticker: str,
         targets: List[str] = None,
         model_types: List[str] = None,
-        force: bool = False
+        force: bool = False,
+        train_untrained: bool = True
     ) -> Dict[str, bool]:
         """
         Incrementally update models for a ticker if sufficient new data is available.
@@ -147,6 +148,7 @@ class IncrementalTrainer:
             targets: List of targets to update (default: ["up", "down"])
             model_types: List of model types to update (default: tree models only)
             force: Force update even if min_samples not reached
+            train_untrained: If True, perform initial training for untrained models
 
         Returns:
             Dictionary mapping model keys to update success status
@@ -188,14 +190,49 @@ class IncrementalTrainer:
 
                 try:
                     # Get existing model
-                    model = self.model_manager.get_or_create_model(ticker, model_type, target)
+                    _, model = self.model_manager.get_or_create_model(ticker, model_type, target)
 
                     if not model.is_trained:
-                        logger.warning(
-                            f"Model {model_key} for {ticker} not trained yet, skipping incremental update"
-                        )
-                        results[model_key] = False
-                        continue
+                        if train_untrained:
+                            # Perform initial training for untrained model
+                            logger.info(
+                                f"Model {model_key} for {ticker} not trained yet, performing initial training"
+                            )
+
+                            # Split data for training and validation (80/20)
+                            n_train = int(len(X_new) * 0.8)
+                            if n_train < 10:
+                                # Not enough data for split, use all for training
+                                model.train(X_new, y_new)
+                            else:
+                                X_train, X_val = X_new[:n_train], X_new[n_train:]
+                                y_train, y_val = y_new[:n_train], y_new[n_train:]
+                                model.train(X_train, y_train, X_val, y_val)
+
+                            # Save the newly trained model
+                            self.model_manager.save_model(ticker, model_type, target, model)
+
+                            # Record initial accuracy
+                            accuracy_after = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+                            self._record_performance_change(
+                                ticker, model_type, target,
+                                0.0,  # No accuracy before
+                                accuracy_after,
+                                n_samples
+                            )
+
+                            results[model_key] = True
+                            logger.info(
+                                f"Initial training completed for {model_key} ({ticker}): "
+                                f"accuracy {accuracy_after:.3f}"
+                            )
+                            continue
+                        else:
+                            logger.warning(
+                                f"Model {model_key} for {ticker} not trained yet, skipping incremental update"
+                            )
+                            results[model_key] = False
+                            continue
 
                     # Record performance before update
                     accuracy_before = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
@@ -238,7 +275,8 @@ class IncrementalTrainer:
         self,
         targets: List[str] = None,
         model_types: List[str] = None,
-        min_samples_override: Optional[int] = None
+        min_samples_override: Optional[int] = None,
+        train_untrained: bool = True
     ) -> Dict[str, Dict[str, bool]]:
         """
         Update models for all tickers with buffered data.
@@ -247,6 +285,7 @@ class IncrementalTrainer:
             targets: List of targets to update (default: ["up", "down"])
             model_types: List of model types to update (default: tree models)
             min_samples_override: Override min_samples requirement
+            train_untrained: If True, perform initial training for untrained models
 
         Returns:
             Dictionary mapping ticker to model update results
@@ -262,7 +301,9 @@ class IncrementalTrainer:
         tickers_to_update = list(self.data_buffers.keys())
 
         for ticker in tickers_to_update:
-            ticker_results = self.update_models(ticker, targets, model_types)
+            ticker_results = self.update_models(
+                ticker, targets, model_types, train_untrained=train_untrained
+            )
             if ticker_results:
                 results[ticker] = ticker_results
 

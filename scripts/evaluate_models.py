@@ -138,7 +138,7 @@ def main():
                                 if len(np.unique(y_test)) > 1
                                 else 0.5
                             )
-                        except:
+                        except ValueError:
                             auc = 0.5
 
                         all_results.append(
@@ -154,8 +154,9 @@ def main():
                                 "positive_rate": y_test.mean(),
                             }
                         )
-                    except:
-                        pass
+                    except (ValueError, KeyError, RuntimeError) as e:
+                        # Skip this model if evaluation fails
+                        continue
 
             if i % 10 == 0:
                 print(f"  Processed {i}/{len(tickers)} tickers")

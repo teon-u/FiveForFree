@@ -141,7 +141,7 @@ async def list_tickers(
                 model_manager.get_best_model(ticker.symbol, "up")
                 has_trained_models = True
             except ValueError:
-                pass
+                logger.debug(f"No trained models for {ticker.symbol}")
 
             ticker_metrics.append(
                 TickerMetrics(

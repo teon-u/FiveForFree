@@ -56,7 +56,7 @@ if 'Close' in data.columns:
         try:
             price = data['Close'][symbol].iloc[-1]
             print(f"   {symbol}: ${price:.2f}")
-        except:
+        except (KeyError, IndexError):
             print(f"   {symbol}: 데이터 없음")
 print()
 

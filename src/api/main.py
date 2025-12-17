@@ -15,6 +15,7 @@ from src.api.routes import (
     models_router,
     health_router,
 )
+from src.api.middleware import RateLimitMiddleware
 from src.api.websocket import (
     handle_websocket_connection,
     broadcast_predictions,
@@ -25,6 +26,7 @@ from src.api.dependencies import (
     shutdown_dependencies,
     get_realtime_predictor,
     get_settings,
+    get_model_manager,
 )
 from src.utils.market_hours import suppress_yfinance_warnings
 from config.settings import settings
@@ -61,10 +63,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         predictor = get_realtime_predictor()
         app_settings = get_settings()
 
-        # Get list of active tickers (you may want to load this from database)
-        # For now, we'll use a placeholder - in production, query the database
-        # for active tickers or configure in settings
-        active_tickers = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]  # Example tickers
+        # Get list of active tickers from model manager (trained models)
+        # Falls back to settings if no trained models available
+        try:
+            model_manager = get_model_manager()
+            trained_tickers = model_manager.get_tickers()
+            if trained_tickers:
+                active_tickers = trained_tickers[:app_settings.TOP_N_VOLUME]  # Limit to configured max
+                logger.info(f"Using {len(active_tickers)} tickers from trained models")
+            else:
+                # Fallback to default tickers if no trained models
+                active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"])
+                logger.warning("No trained models found, using default tickers")
+        except Exception as e:
+            logger.warning(f"Failed to get tickers from model manager: {e}")
+            active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"])
 
         # Start prediction broadcast task (every minute)
         prediction_task = asyncio.create_task(
@@ -125,6 +138,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add rate limiting middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_minute=60,  # 60 requests per minute
+    requests_per_hour=1000,  # 1000 requests per hour
+    burst_limit=10,  # Max 10 requests per second
+    exclude_paths=["/docs", "/redoc", "/openapi.json", "/api/health", "/"],
 )
 
 

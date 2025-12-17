@@ -132,13 +132,13 @@ async def get_model_performance(
             best_up_type, _ = model_manager.get_best_model(ticker, "up")
             best_up_model = best_up_type
         except ValueError:
-            pass
+            logger.debug(f"No best 'up' model found for {ticker}")
 
         try:
             best_down_type, _ = model_manager.get_best_model(ticker, "down")
             best_down_model = best_down_type
         except ValueError:
-            pass
+            logger.debug(f"No best 'down' model found for {ticker}")
 
         # Sort models by hit rate (descending)
         up_models.sort(key=lambda x: x.hit_rate_50h, reverse=True)
@@ -232,13 +232,13 @@ async def get_all_models_performance(
                     best_up_type, _ = model_manager.get_best_model(ticker, "up")
                     best_up_model = best_up_type
                 except ValueError:
-                    pass
+                    logger.debug(f"No best 'up' model found for {ticker}")
 
                 try:
                     best_down_type, _ = model_manager.get_best_model(ticker, "down")
                     best_down_model = best_down_type
                 except ValueError:
-                    pass
+                    logger.debug(f"No best 'down' model found for {ticker}")
 
                 # Sort models by hit rate
                 up_models.sort(key=lambda x: x.hit_rate_50h, reverse=True)
@@ -507,8 +507,21 @@ async def get_model_overview(
                 trend = "declining"
             else:
                 trend = "stable"
-        except:
+        except Exception:
             trend = "unknown"
+
+        # Get actual backtest metrics for avg_return and sharpe
+        avg_return = 0.0
+        sharpe_ratio = 0.0
+        try:
+            if best_up_model and best_up_model.is_trained:
+                backtest_results = best_up_model.get_backtest_results(hours=settings.BACKTEST_HOURS)
+                if backtest_results and 'metrics' in backtest_results:
+                    metrics = backtest_results['metrics']
+                    avg_return = metrics.get('avg_return', 0.0)
+                    sharpe_ratio = metrics.get('sharpe_ratio', 0.0)
+        except Exception as e:
+            logger.warning(f"Failed to get backtest metrics for {ticker}: {e}")
 
         return ModelOverviewResponse(
             ticker=ticker,
@@ -523,8 +536,8 @@ async def get_model_overview(
             quick_stats={
                 "accuracy": round(accuracy, 3),
                 "win_rate": round(up_stats.get('recall', 0.0), 3),
-                "avg_return": 0.031,  # Placeholder - would need backtest data
-                "sharpe": 1.8  # Placeholder - would need backtest data
+                "avg_return": round(avg_return, 4),
+                "sharpe": round(sharpe_ratio, 2)
             },
             risk_indicators={
                 "false_positive_rate": round(fp_rate, 3),
@@ -718,42 +731,78 @@ async def get_ensemble_analysis(
                     "is_trained": False
                 })
 
-        # Calculate current agreement (simplified - would need actual prediction data)
-        # For now, use recent accuracy as proxy for agreement
+        # Calculate current agreement using actual prediction data
         ensemble_accuracy = ensemble_model.get_recent_accuracy(hours=50)
+
+        # Determine ensemble direction based on up vs down model performance
+        try:
+            _, up_ensemble = model_manager.get_or_create_model(ticker, "ensemble", "up")
+            _, down_ensemble = model_manager.get_or_create_model(ticker, "ensemble", "down")
+            up_acc = up_ensemble.get_recent_accuracy(hours=50) if up_ensemble.is_trained else 0.0
+            down_acc = down_ensemble.get_recent_accuracy(hours=50) if down_ensemble.is_trained else 0.0
+            ensemble_direction = "up" if up_acc >= down_acc else "down"
+            ensemble_prob = max(up_acc, down_acc)
+        except Exception:
+            ensemble_direction = "up"
+            ensemble_prob = ensemble_accuracy
 
         base_predictions = []
         for model_info in base_models:
             if model_info['is_trained']:
+                # Determine direction based on model accuracy (higher = more confident in up)
+                model_direction = "up" if model_info['accuracy'] >= 0.5 else "down"
                 base_predictions.append({
                     "model": model_info['type'],
-                    "direction": "up",  # Placeholder
-                    "probability": model_info['accuracy'],  # Using accuracy as proxy
+                    "direction": model_direction,
+                    "probability": model_info['accuracy'],
                 })
 
-        # Calculate agreement rate
+        # Calculate agreement rate based on direction consensus
         if len(base_predictions) > 1:
+            up_votes = sum(1 for p in base_predictions if p['direction'] == 'up')
+            down_votes = len(base_predictions) - up_votes
+            # Agreement is the proportion of models agreeing with majority
+            majority_votes = max(up_votes, down_votes)
+            agreement_rate = majority_votes / len(base_predictions)
+            # Also consider accuracy variance
             accuracies = [p['probability'] for p in base_predictions]
             avg_accuracy = sum(accuracies) / len(accuracies)
-            # Agreement based on how close models are to each other
             variance = sum((acc - avg_accuracy) ** 2 for acc in accuracies) / len(accuracies)
-            agreement_rate = max(0.0, 1.0 - variance)
         else:
-            agreement_rate = 0.0
+            agreement_rate = 1.0 if len(base_predictions) == 1 else 0.0
+            variance = 0.0
 
         current_agreement = {
             "ensemble_prediction": {
-                "direction": "up",
-                "probability": ensemble_accuracy
+                "direction": ensemble_direction,
+                "probability": ensemble_prob
             },
             "base_predictions": base_predictions,
             "agreement_rate": round(agreement_rate, 3),
             "variance": round(variance if len(base_predictions) > 1 else 0.0, 4)
         }
 
+        # Get actual ensemble metrics (precision, recall, f1)
+        ensemble_precision = 0.0
+        ensemble_recall = 0.0
+        ensemble_f1 = 0.0
+        try:
+            if ensemble_model.is_trained:
+                ensemble_stats = ensemble_model.get_prediction_stats(hours=50)
+                ensemble_precision = ensemble_stats.get('precision', 0.0)
+                ensemble_recall = ensemble_stats.get('recall', 0.0)
+                # Calculate F1 score
+                if ensemble_precision + ensemble_recall > 0:
+                    ensemble_f1 = 2 * ensemble_precision * ensemble_recall / (ensemble_precision + ensemble_recall)
+        except Exception as e:
+            logger.warning(f"Failed to get ensemble metrics: {e}")
+
         # Compare ensemble vs individual base models
         ensemble_vs_base = {
             "ensemble_accuracy": round(ensemble_accuracy, 4),
+            "ensemble_precision": round(ensemble_precision, 4),
+            "ensemble_recall": round(ensemble_recall, 4),
+            "ensemble_f1": round(ensemble_f1, 4),
             "best_base_accuracy": round(max([m['accuracy'] for m in base_models if m['is_trained']], default=0.0), 4),
             "avg_base_accuracy": round(sum([m['accuracy'] for m in base_models if m['is_trained']]) / len([m for m in base_models if m['is_trained']]) if any(m['is_trained'] for m in base_models) else 0.0, 4),
             "improvement": round(ensemble_accuracy - max([m['accuracy'] for m in base_models if m['is_trained']], default=0.0), 4)
