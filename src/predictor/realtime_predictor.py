@@ -267,9 +267,10 @@ class RealtimePredictor:
             direct_up_prob = best_up_model.predict_proba(X)[0]
             direct_down_prob = best_down_model.predict_proba(X)[0]
 
-            # Get model accuracies
-            up_accuracy = best_up_model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
-            down_accuracy = best_down_model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+            # Get model precision (more meaningful than overall accuracy)
+            # Precision = When model predicts positive, how often is it correct?
+            up_accuracy = best_up_model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
+            down_accuracy = best_down_model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
             # Initialize final probabilities (default to direct predictions)
             final_up_prob = direct_up_prob
@@ -503,7 +504,10 @@ class RealtimePredictor:
 
     def _collect_minute_bars(self, ticker: str) -> Optional[pd.DataFrame]:
         """
-        Collect minute bar data for feature computation from database.
+        Collect minute bar data for feature computation from database only.
+
+        Uses cached database data to avoid slow yfinance API calls.
+        This is faster and works outside market hours.
 
         Args:
             ticker: Stock ticker symbol
@@ -516,18 +520,21 @@ class RealtimePredictor:
             return None
 
         try:
-            # Get bars from database for lookback period
+            # Get bars from database only (no yfinance calls)
             end_time = datetime.now()
             start_time = end_time - timedelta(days=7)  # Get last 7 days of data
 
-            # Use get_bars_as_dataframe which loads from database
-            df = self.minute_bar_collector.get_bars_as_dataframe(
+            # Use load_bars_from_db directly to avoid yfinance calls
+            bars = self.minute_bar_collector.load_bars_from_db(
                 ticker,
                 start_time,
                 end_time
             )
 
-            if df is not None and len(df) > 0:
+            if bars and len(bars) > 0:
+                # Convert to DataFrame
+                df = pd.DataFrame([bar.to_dict() for bar in bars])
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
                 logger.debug(f"Loaded {len(df)} minute bars for {ticker} from database")
                 return df
             else:
@@ -627,11 +634,11 @@ class RealtimePredictor:
                     if model.is_trained:
                         try:
                             prob = model.predict_proba(X)[0]
-                            accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+                            precision = model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
                             all_predictions[target][model_type] = {
                                 'probability': float(prob),
-                                'accuracy': float(accuracy)
+                                'accuracy': float(precision)  # Now reports precision
                             }
                         except Exception as e:
                             logger.error(f"Failed to get prediction from {model_type}: {e}")
@@ -650,11 +657,11 @@ class RealtimePredictor:
                         if model.is_trained:
                             try:
                                 prob = model.predict_proba(X)[0]
-                                accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
+                                precision = model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
                                 all_predictions[target][model_type] = {
                                     'probability': float(prob),
-                                    'accuracy': float(accuracy)
+                                    'accuracy': float(precision)  # Now reports precision
                                 }
                             except Exception as e:
                                 logger.error(f"Failed to get hybrid prediction from {model_type}: {e}")

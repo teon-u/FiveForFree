@@ -21,10 +21,10 @@ export default function ModelComparison({ models }) {
     return names[name] || name
   }
 
-  // Get hit rate color
-  const getHitRateColor = (hitRate) => {
-    if (hitRate >= 75) return 'text-green-400'
-    if (hitRate >= 65) return 'text-yellow-400'
+  // Get precision color
+  const getPrecisionColor = (precision) => {
+    if (precision >= 75) return 'text-green-400'
+    if (precision >= 65) return 'text-yellow-400'
     return 'text-red-400'
   }
 
@@ -34,9 +34,9 @@ export default function ModelComparison({ models }) {
         <thead>
           <tr>
             <th>Model</th>
-            <th className="text-center">Up Hit Rate</th>
-            <th className="text-center">Down Hit Rate</th>
-            <th className="text-center">Avg Hit Rate</th>
+            <th className="text-center">Up Precision</th>
+            <th className="text-center">Down Precision</th>
+            <th className="text-center">Avg Precision</th>
             <th className="text-center">Status</th>
           </tr>
         </thead>
@@ -51,13 +51,13 @@ export default function ModelComparison({ models }) {
             return (
               <tr key={modelType} className="hover:bg-surface-light/50 transition-colors">
                 <td className="font-semibold">{formatModelName(modelType)}</td>
-                <td className={`text-center ${getHitRateColor(upHitRate)}`}>
+                <td className={`text-center ${getPrecisionColor(upHitRate)}`}>
                   {upHitRate.toFixed(1)}%
                 </td>
-                <td className={`text-center ${getHitRateColor(downHitRate)}`}>
+                <td className={`text-center ${getPrecisionColor(downHitRate)}`}>
                   {downHitRate.toFixed(1)}%
                 </td>
-                <td className={`text-center font-semibold ${getHitRateColor(avgHitRate)}`}>
+                <td className={`text-center font-semibold ${getPrecisionColor(avgHitRate)}`}>
                   {avgHitRate.toFixed(1)}%
                 </td>
                 <td className="text-center">
@@ -77,15 +77,15 @@ export default function ModelComparison({ models }) {
       <div className="mt-4 flex items-center gap-6 text-xs text-gray-400">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-green-400 rounded" />
-          <span>≥75% Hit Rate</span>
+          <span>≥75% Precision</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-yellow-400 rounded" />
-          <span>65-75% Hit Rate</span>
+          <span>65-75% Precision</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-red-400 rounded" />
-          <span>&lt;65% Hit Rate</span>
+          <span>&lt;65% Precision</span>
         </div>
       </div>
     </div>

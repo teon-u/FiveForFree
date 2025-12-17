@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # GPU Settings
     USE_GPU: bool = True
 
+    # Data Directory
+    DATA_DIR: str = "./data"
+
     # Database
     DATABASE_URL: str = "sqlite:///./data/nasdaq_predictor.db"
 
@@ -38,8 +41,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",  # Vite default dev server
         "http://localhost:3000",  # Common React dev server
+        "http://localhost:3001",  # Vite fallback port
+        "http://localhost:3002",  # Vite fallback port 2
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
         "http://localhost:8080",  # Alternative dev server
         "http://127.0.0.1:8080",
     ]

@@ -77,6 +77,8 @@ class SimplePrediction(BaseModel):
     best_model: str = Field(..., description="Best performing model")
     hit_rate: float = Field(..., description="Model accuracy (0-1)")
     current_price: float = Field(..., description="Current stock price")
+    signal_rate: float = Field(0.0, description="Signal rate (0-1)")
+    practicality_grade: str = Field("D", description="Practicality grade (A/B/C/D)")
 
 
 class CategorizedPredictionsResponse(BaseModel):
@@ -316,7 +318,7 @@ async def get_categorized_predictions(
     try:
         logger.info("Fetching predictions for trained tickers")
 
-        # Use trained tickers from model manager instead of live Yahoo Finance
+        # Use trained tickers from model manager
         from src.api.dependencies import get_model_manager
         model_manager = get_model_manager()
         trained_tickers = model_manager.get_tickers()
@@ -329,15 +331,87 @@ async def get_categorized_predictions(
                 timestamp=datetime.utcnow().isoformat(),
             )
 
-        # Create mock categories structure using trained tickers
-        class MockTickerMetrics:
-            def __init__(self, ticker):
+        # Get real-time metrics using batch fetch for performance
+        import yfinance as yf
+        ticker_metrics_map = {}
+
+        # Batch fetch data for all trained tickers (much faster than individual calls)
+        tickers_to_fetch = trained_tickers[:100]
+        try:
+            # Use yfinance download for batch fetching - gets today's data
+            data = yf.download(
+                tickers=tickers_to_fetch,
+                period="2d",  # Get 2 days to calculate change
+                interval="1d",
+                progress=False,
+                group_by='ticker',
+                threads=True
+            )
+
+            if not data.empty:
+                for ticker in tickers_to_fetch:
+                    try:
+                        if len(tickers_to_fetch) > 1:
+                            ticker_data = data[ticker] if ticker in data.columns.get_level_values(0) else None
+                        else:
+                            ticker_data = data
+
+                        if ticker_data is not None and not ticker_data.empty and len(ticker_data) >= 2:
+                            prev_close = ticker_data['Close'].iloc[-2]
+                            current_close = ticker_data['Close'].iloc[-1]
+                            # Check for NaN values before calculation
+                            import math
+                            if prev_close > 0 and not math.isnan(prev_close) and not math.isnan(current_close):
+                                change_percent = ((current_close - prev_close) / prev_close) * 100
+                                # Ensure result is not NaN
+                                if not math.isnan(change_percent):
+                                    class BatchTickerMetrics:
+                                        def __init__(self, t, cp):
+                                            self.ticker = t
+                                            self.change_percent = float(cp)  # Ensure float conversion
+
+                                    ticker_metrics_map[ticker] = BatchTickerMetrics(ticker, change_percent)
+                    except Exception as e:
+                        logger.debug(f"Error processing {ticker}: {e}")
+                        continue
+
+            logger.info(f"Batch fetched metrics for {len(ticker_metrics_map)} tickers")
+        except Exception as e:
+            logger.warning(f"Batch fetch failed: {e}")
+
+        # Create wrapper class for tickers without real-time data
+        class TickerMetricsWrapper:
+            def __init__(self, ticker, change_percent=0.0):
                 self.ticker = ticker
-                self.change_percent = 0.0
+                self.change_percent = change_percent
+
+        # Build categories using real metrics when available
+        volume_tickers = []
+        gainers_tickers = []
+
+        for ticker in trained_tickers[:50]:
+            if ticker in ticker_metrics_map:
+                volume_tickers.append(ticker_metrics_map[ticker])
+            else:
+                volume_tickers.append(TickerMetricsWrapper(ticker))
+
+        # Sort gainers by change_percent descending
+        tickers_with_metrics = [(t, m) for t, m in ticker_metrics_map.items() if t in trained_tickers]
+        tickers_with_metrics.sort(key=lambda x: x[1].change_percent, reverse=True)
+
+        for ticker, metrics in tickers_with_metrics[:50]:
+            gainers_tickers.append(metrics)
+
+        # Fill remaining slots if needed
+        for ticker in trained_tickers[:50]:
+            if len(gainers_tickers) >= 50:
+                break
+            if ticker not in ticker_metrics_map:
+                gainers_tickers.append(TickerMetricsWrapper(ticker))
 
         categories = {
-            'volume': [MockTickerMetrics(t) for t in trained_tickers[:50]],
-            'gainers': [MockTickerMetrics(t) for t in trained_tickers[:50]],
+            'volume': volume_tickers,
+            'gainers': gainers_tickers,
         }
 
         if not categories:
@@ -362,6 +436,18 @@ async def get_categorized_predictions(
                 best_model = result.best_down_model
                 hit_rate = result.down_model_accuracy
 
+            # Get signal_rate and practicality_grade from model performance
+            signal_rate = 0.0
+            practicality_grade = "D"
+            try:
+                performances = model_manager.get_model_performances(result.ticker)
+                if direction in performances and best_model in performances[direction]:
+                    model_perf = performances[direction][best_model]
+                    signal_rate = model_perf.get('signal_rate', 0.0)
+                    practicality_grade = model_perf.get('practicality_grade', 'D')
+            except Exception:
+                pass  # Use defaults if unable to get performance data
+
             return SimplePrediction(
                 ticker=result.ticker,
                 probability=probability,
@@ -370,6 +456,8 @@ async def get_categorized_predictions(
                 best_model=best_model,
                 hit_rate=hit_rate,
                 current_price=result.current_price,
+                signal_rate=signal_rate,
+                practicality_grade=practicality_grade,
             )
 
         # Process volume top tickers

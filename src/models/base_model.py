@@ -191,6 +191,127 @@ class BaseModel(ABC):
 
         return correct / len(recent)
 
+    def get_precision_at_threshold(self, hours: int = 50, threshold: float = 0.5) -> float:
+        """
+        Calculate precision for predictions above threshold.
+
+        Precision = TP / (TP + FP)
+        When model predicts positive (prob >= threshold), how often is it correct?
+
+        This is a more meaningful metric than overall accuracy because:
+        - It measures reliability of HIGH confidence predictions
+        - It's not skewed by class imbalance
+
+        Args:
+            hours: Number of hours to look back
+            threshold: Probability threshold for positive prediction
+
+        Returns:
+            Precision as a float between 0 and 1, or 0 if no positive predictions
+        """
+        if not self.prediction_history:
+            return 0.0
+
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+
+        recent = [
+            pred for pred in self.prediction_history
+            if pred['timestamp'] >= cutoff_time and pred['actual_outcome'] is not None
+        ]
+
+        if not recent:
+            return 0.0
+
+        # Count predictions where model predicted positive (prob >= threshold)
+        true_positives = 0
+        false_positives = 0
+
+        for pred in recent:
+            if pred['probability'] >= threshold:
+                if pred['actual_outcome']:
+                    true_positives += 1
+                else:
+                    false_positives += 1
+
+        total_positive_predictions = true_positives + false_positives
+
+        if total_positive_predictions == 0:
+            return 0.0
+
+        return true_positives / total_positive_predictions
+
+    def get_signal_metrics(self, hours: int = 50, threshold: float = 0.5) -> dict:
+        """
+        Get comprehensive signal metrics for trading decisions.
+
+        Returns metrics that are meaningful for trading:
+        - precision: When model says "buy", how often is it right?
+        - recall: Of all actual opportunities, how many did we catch?
+        - signal_count: How many signals were generated?
+        - true_positive_rate: Same as recall
+
+        Args:
+            hours: Number of hours to look back
+            threshold: Probability threshold for positive prediction
+
+        Returns:
+            Dictionary with signal metrics
+        """
+        if not self.prediction_history:
+            return {
+                'precision': 0.0,
+                'recall': 0.0,
+                'signal_count': 0,
+                'true_positive_count': 0,
+                'actual_positive_count': 0
+            }
+
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+
+        recent = [
+            pred for pred in self.prediction_history
+            if pred['timestamp'] >= cutoff_time and pred['actual_outcome'] is not None
+        ]
+
+        if not recent:
+            return {
+                'precision': 0.0,
+                'recall': 0.0,
+                'signal_count': 0,
+                'true_positive_count': 0,
+                'actual_positive_count': 0
+            }
+
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        actual_positives = 0
+
+        for pred in recent:
+            if pred['actual_outcome']:
+                actual_positives += 1
+
+            if pred['probability'] >= threshold:
+                if pred['actual_outcome']:
+                    true_positives += 1
+                else:
+                    false_positives += 1
+            else:
+                if pred['actual_outcome']:
+                    false_negatives += 1
+
+        signal_count = true_positives + false_positives
+        precision = true_positives / signal_count if signal_count > 0 else 0.0
+        recall = true_positives / actual_positives if actual_positives > 0 else 0.0
+
+        return {
+            'precision': precision,
+            'recall': recall,
+            'signal_count': signal_count,
+            'true_positive_count': true_positives,
+            'actual_positive_count': actual_positives
+        }
+
     def get_prediction_stats(self, hours: int = 50) -> dict[str, Any]:
         """
         Get detailed statistics about recent predictions.
@@ -228,16 +349,41 @@ class BaseModel(ABC):
         accuracy = (tp + tn) / len(recent) if recent else 0.0
         avg_prob = np.mean([p['probability'] for p in recent])
 
+        # Signal Rate = (predictions with prob >= 0.5) / total opportunities
+        signals = tp + fp  # Number of buy signals
+        total = len(recent)
+        signal_rate = signals / total if total > 0 else 0.0
+
+        # Precision (key metric for profitability)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+
+        # Practicality Grade based on precision and signal_rate
+        # A: precision >= 50% AND signal_rate >= 10%
+        # B: precision >= 30% AND signal_rate >= 10%
+        # C: precision >= 30% AND signal_rate < 10%
+        # D: precision < 30%
+        if precision >= 0.50 and signal_rate >= 0.10:
+            practicality_grade = 'A'
+        elif precision >= 0.30 and signal_rate >= 0.10:
+            practicality_grade = 'B'
+        elif precision >= 0.30:
+            practicality_grade = 'C'
+        else:
+            practicality_grade = 'D'
+
         return {
-            'total_predictions': len(recent),
+            'total_predictions': total,
             'accuracy': accuracy,
             'avg_probability': float(avg_prob),
             'true_positives': tp,
             'false_positives': fp,
             'true_negatives': tn,
             'false_negatives': fn,
-            'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0,
-            'recall': tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            'precision': precision,
+            'recall': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'signal_rate': signal_rate,
+            'signal_count': signals,
+            'practicality_grade': practicality_grade
         }
 
     def cleanup_old_predictions(self, days: int = 7) -> None:

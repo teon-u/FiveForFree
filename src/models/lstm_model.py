@@ -3,8 +3,10 @@
 from pathlib import Path
 from typing import Optional
 import numpy as np
+import pickle
 
 from loguru import logger
+from sklearn.preprocessing import StandardScaler
 
 from src.models.base_model import BaseModel
 
@@ -37,8 +39,8 @@ class LSTMNetwork(nn.Module):
             nn.Linear(hidden_size, 32),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(32, 1),
-            nn.Sigmoid()
+            nn.Linear(32, 1)
+            # Note: Sigmoid removed - use BCEWithLogitsLoss for numerical stability
         )
 
     def forward(self, x):
@@ -92,6 +94,7 @@ class LSTMModel(BaseModel):
         self._model: Optional[LSTMNetwork] = None
         self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if HAS_TORCH else None
         self.input_size: Optional[int] = None  # Set during training, used for loading
+        self._scaler: Optional[StandardScaler] = None  # Feature scaler for normalization
 
     def _prepare_sequences(self, X, y=None):
         """Prepare sequences for LSTM."""
@@ -116,8 +119,15 @@ class LSTMModel(BaseModel):
         if not HAS_TORCH:
             raise ImportError("PyTorch is not installed")
 
-        # Prepare sequences
-        X_seq, y_seq = self._prepare_sequences(X, y)
+        # Handle NaN/Inf in raw data
+        X = np.nan_to_num(X, nan=0.0, posinf=1e6, neginf=-1e6)
+
+        # Fit scaler on training data and transform
+        self._scaler = StandardScaler()
+        X_scaled = self._scaler.fit_transform(X)
+
+        # Prepare sequences with scaled data
+        X_seq, y_seq = self._prepare_sequences(X_scaled, y)
 
         # Initialize model
         self.input_size = X_seq.shape[2]
@@ -129,7 +139,8 @@ class LSTMModel(BaseModel):
         ).to(self._device)
 
         optimizer = torch.optim.Adam(self._model.parameters(), lr=self.learning_rate)
-        criterion = nn.BCELoss()
+        # Use BCEWithLogitsLoss for numerical stability (combines Sigmoid + BCELoss)
+        criterion = nn.BCEWithLogitsLoss()
 
         # Convert to tensors
         X_tensor = torch.FloatTensor(X_seq).to(self._device)
@@ -146,6 +157,8 @@ class LSTMModel(BaseModel):
                 outputs = self._model(batch_X)
                 loss = criterion(outputs, batch_y)
                 loss.backward()
+                # Gradient clipping for stability
+                torch.nn.utils.clip_grad_norm_(self._model.parameters(), max_norm=1.0)
                 optimizer.step()
 
         self.is_trained = True
@@ -156,22 +169,30 @@ class LSTMModel(BaseModel):
         """Predict probabilities."""
         if not self.is_trained or self._model is None:
             raise ValueError("Model not trained")
+        if self._scaler is None:
+            raise ValueError("Scaler not initialized")
 
         self._model.eval()
 
+        # Handle NaN/Inf and scale
+        X = np.nan_to_num(X, nan=0.0, posinf=1e6, neginf=-1e6)
+        X_scaled = self._scaler.transform(X)
+
         # Handle single sample or batch
-        if len(X) < self.sequence_length:
+        if len(X_scaled) < self.sequence_length:
             # Pad with zeros if needed
-            padded = np.zeros((self.sequence_length, X.shape[-1]))
-            padded[-len(X):] = X
+            padded = np.zeros((self.sequence_length, X_scaled.shape[-1]))
+            padded[-len(X_scaled):] = X_scaled
             X_seq = padded.reshape(1, self.sequence_length, -1)
         else:
-            X_seq = self._prepare_sequences(X)
+            X_seq = self._prepare_sequences(X_scaled)
 
         X_tensor = torch.FloatTensor(X_seq).to(self._device)
 
         with torch.no_grad():
-            proba = self._model(X_tensor).cpu().numpy()
+            logits = self._model(X_tensor)
+            # Apply sigmoid since model outputs logits
+            proba = torch.sigmoid(logits).cpu().numpy()
 
         return proba
 
@@ -184,6 +205,10 @@ class LSTMModel(BaseModel):
                 'input_size': self.input_size
             }
             torch.save(save_dict, path.with_suffix('.pt'))
+        # Save scaler separately
+        if self._scaler is not None:
+            with open(path.with_suffix('.scaler'), 'wb') as f:
+                pickle.dump(self._scaler, f)
         super().save(path)
 
     def load(self, path: Path):
@@ -210,3 +235,9 @@ class LSTMModel(BaseModel):
                 dropout=self.dropout
             ).to(self._device)
             self._model.load_state_dict(state_dict)
+
+        # Load scaler
+        scaler_path = path.with_suffix('.scaler')
+        if scaler_path.exists():
+            with open(scaler_path, 'rb') as f:
+                self._scaler = pickle.load(f)

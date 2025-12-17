@@ -172,6 +172,93 @@ class TickerSelector:
 
         return top_volume
 
+    def get_market_top_gainers(self, limit: int = 50) -> List[TickerMetrics]:
+        """
+        Get real-time top gainers from entire NASDAQ market using Yahoo Finance screener.
+
+        This discovers new stocks outside the predefined NASDAQ_UNIVERSE list.
+
+        Args:
+            limit: Maximum number of gainers to return
+
+        Returns:
+            List of TickerMetrics for top gainers
+        """
+        logger.info("Fetching real-time market top gainers from Yahoo Finance...")
+
+        try:
+            import requests
+
+            # Yahoo Finance screener API for NASDAQ gainers
+            url = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
+            params = {
+                "scrIds": "day_gainers",
+                "count": limit * 2,  # Fetch more to filter
+            }
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                logger.warning(f"Yahoo screener API returned {response.status_code}")
+                return []
+
+            data = response.json()
+            quotes = data.get("finance", {}).get("result", [{}])[0].get("quotes", [])
+
+            gainers = []
+            for quote in quotes:
+                try:
+                    symbol = quote.get("symbol", "")
+                    # Filter for NASDAQ stocks only
+                    exchange = quote.get("exchange", "")
+                    if exchange not in ["NMS", "NGM", "NCM", "NASDAQ"]:
+                        continue
+
+                    price = quote.get("regularMarketPrice", 0)
+                    change_pct = quote.get("regularMarketChangePercent", 0)
+                    volume = quote.get("regularMarketVolume", 0)
+                    prev_close = quote.get("regularMarketPreviousClose", 0)
+                    market_cap = quote.get("marketCap")
+                    name = quote.get("shortName") or quote.get("longName")
+
+                    # Apply filters
+                    if price < self.min_price:
+                        continue
+                    if volume < self.min_volume:
+                        continue
+
+                    gainers.append(TickerMetrics(
+                        ticker=symbol,
+                        volume=volume,
+                        change_percent=change_pct,
+                        price=price,
+                        prev_close=prev_close,
+                        market_cap=market_cap,
+                        company_name=name,
+                        category='gainer'
+                    ))
+
+                except Exception as e:
+                    logger.debug(f"Error parsing quote: {e}")
+                    continue
+
+            # Sort by change percent and limit
+            gainers.sort(key=lambda x: x.change_percent, reverse=True)
+            result = gainers[:limit]
+
+            logger.info(f"Found {len(result)} market top gainers")
+            if result:
+                logger.info(f"Top 5: {', '.join(f'{g.ticker}({g.change_percent:.1f}%)' for g in result[:5])}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to fetch market gainers: {e}")
+            return []
+
     def get_top_by_gainers(self) -> List[TickerMetrics]:
         """
         Get top N tickers by percentage gain.
