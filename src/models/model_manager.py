@@ -82,8 +82,19 @@ class ModelManager:
                             model = pickle.load(f)
 
                         # Handle legacy pickle files that saved as 'model' instead of '_model'
-                        if hasattr(model, 'model') and not hasattr(model, '_model'):
-                            model._model = model.model
+                        # Check if 'model' attribute exists and has a value, while '_model' is None
+                        if hasattr(model, 'model') and model.model is not None:
+                            if not hasattr(model, '_model') or model._model is None:
+                                model._model = model.model
+                                logger.debug(f"Migrated legacy 'model' to '_model' for {model_file.name}")
+
+                        # For LSTM/Transformer models, call load() to restore PyTorch weights from .pt file
+                        if model_type in ('lstm', 'transformer'):
+                            try:
+                                model.load(model_file)
+                                logger.debug(f"Loaded PyTorch weights for {model_file.name}")
+                            except Exception as e:
+                                logger.warning(f"Could not load PyTorch weights for {model_file.name}: {e}")
 
                         self._models[ticker][model_type][target] = model
                         loaded_count += 1
@@ -115,11 +126,43 @@ class ModelManager:
         # Use {target}_{model_type}.pkl to match existing file naming convention
         model_path = ticker_dir / f"{target}_{model_type}.pkl"
 
+        # Call model's save() first to save PyTorch weights (.pt files) for LSTM/Transformer
+        model.save(model_path)
+
+        # Then pickle the model object (metadata and non-PyTorch state)
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
 
         logger.info(f"Saved model to {model_path}")
         return model_path
+
+    def save_models(self, ticker: str) -> int:
+        """
+        Save all models for a ticker to disk.
+
+        Args:
+            ticker: Ticker symbol
+
+        Returns:
+            Number of models saved.
+        """
+        ticker = ticker.upper()
+        saved_count = 0
+
+        if ticker not in self._models:
+            logger.warning(f"No models found for ticker {ticker}")
+            return 0
+
+        for model_type, targets in self._models[ticker].items():
+            for target, model in targets.items():
+                try:
+                    self.save_model(ticker, model_type, target, model)
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to save {model_type}_{target} for {ticker}: {e}")
+
+        logger.info(f"Saved {saved_count} models for {ticker}")
+        return saved_count
 
     def get_or_create_model(
         self,
@@ -229,6 +272,29 @@ class ModelManager:
             raise ValueError(f"No trained models found for {ticker} {target}")
 
         return best_model_type, best_model
+
+    def get_all_models(self, ticker: str, target: str) -> Dict[str, BaseModel]:
+        """
+        Get all models for a ticker and target.
+
+        Args:
+            ticker: Ticker symbol
+            target: Target direction (up, down, volatility, direction)
+
+        Returns:
+            Dict with structure {model_type: model}
+        """
+        ticker = ticker.upper()
+        result: Dict[str, BaseModel] = {}
+
+        if ticker not in self._models:
+            return result
+
+        for model_type in self._models[ticker]:
+            if target in self._models[ticker][model_type]:
+                result[model_type] = self._models[ticker][model_type][target]
+
+        return result
 
     def get_model_performances(self, ticker: str) -> Dict[str, Dict[str, Dict[str, Any]]]:
         """

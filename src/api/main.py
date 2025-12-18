@@ -16,6 +16,7 @@ from src.api.routes import (
     health_router,
 )
 from src.api.routes.status import router as status_router
+from src.api.routes.prices import router as prices_router
 from src.api.middleware import RateLimitMiddleware
 from src.api.websocket import (
     handle_websocket_connection,
@@ -75,11 +76,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info(f"Using {len(active_tickers)} tickers from trained models")
             else:
                 # Fallback to default tickers if no trained models
-                active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"])
+                active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', [])
                 logger.warning("No trained models found, using default tickers")
         except Exception as e:
             logger.warning(f"Failed to get tickers from model manager: {e}")
-            active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"])
+            active_tickers = getattr(app_settings, 'DEFAULT_TICKERS', [])
 
         # Start prediction broadcast task (every minute)
         prediction_task = asyncio.create_task(
@@ -168,6 +169,7 @@ app.include_router(predictions_router)
 app.include_router(tickers_router)
 app.include_router(models_router)
 app.include_router(status_router)
+app.include_router(prices_router)
 
 
 # Root endpoint
@@ -190,6 +192,7 @@ async def root() -> JSONResponse:
                 "tickers": "/api/tickers",
                 "models": "/api/models",
                 "status": "/api/status",
+                "prices": "/api/prices",
                 "websocket": "/ws",
                 "docs": "/docs",
                 "redoc": "/redoc",

@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "updated": "2025-12-18",
+  "description": "NASDAQ universe for ticker selection",
+  "categories": {
+    "mega_cap": [
+      "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AVGO"
+    ],
+    "large_cap_tech": [
+      "AMD", "INTC", "CSCO", "ADBE", "ORCL", "TXN", "QCOM", "COST", "CMCSA", "PEP",
+      "TMUS", "AMGN", "SBUX", "PYPL", "ABNB", "MRNA", "BKNG", "ADP", "GILD", "ADI"
+    ],
+    "mid_small_cap_growth": [
+      "REGN", "ISRG", "PANW", "MU", "LRCX", "KLAC", "SNPS", "CDNS", "ASML", "MELI",
+      "NXPI", "MAR", "ORLY", "CTAS", "DXCM", "WDAY", "IDXX", "MNST", "VRTX", "LULU",
+      "CHTR", "MCHP", "FTNT", "PAYX", "ADSK", "ROST", "FAST", "ODFL", "CPRT", "VRSK",
+      "EA", "PCAR", "KDP", "CTSH", "ANSS", "DLTR", "CSGP", "ILMN", "EBAY", "WBA"
+    ],
+    "high_volatility": [
+      "BIIB", "ZS", "DDOG", "TEAM", "CRWD", "OKTA", "ZM", "DOCU", "SPLK", "MDB",
+      "NET", "SNOW", "ESTC", "BILL", "RIVN", "LCID", "COIN", "RBLX", "U", "DASH",
+      "HOOD", "SOFI", "PLTR", "UPST", "AFRM", "SQ", "UBER", "LYFT", "ABNB", "SPOT"
+    ],
+    "additional_high_volume": [
+      "AMAT", "NTES", "MRVL", "BIDU", "JD", "PDD", "NDAQ", "ALGN", "SIRI", "GEHC",
+      "ON", "TTWO", "WBD", "ENPH", "FANG", "SGEN", "VRSN", "ICLR", "BMRN", "SWKS"
+    ]
+  }
+}

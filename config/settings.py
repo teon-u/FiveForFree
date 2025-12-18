@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # Model Settings
     MODEL_TYPES: list[str] = ["xgboost", "lightgbm", "lstm", "transformer", "ensemble"]
     PREDICTION_TARGETS: list[str] = ["up", "down"]
+    DEFAULT_TICKERS: list[str] = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
 
     # Hybrid-Ensemble Settings (Structure B)
     HYBRID_TARGETS: list[str] = ["volatility", "direction"]  # Structure B targets

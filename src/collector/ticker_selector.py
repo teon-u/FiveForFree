@@ -2,11 +2,42 @@
 
 from typing import List, Optional, Dict
 from dataclasses import dataclass
+from pathlib import Path
+import json
 import yfinance as yf
 import pandas as pd
 from loguru import logger
 from config.settings import settings
 from src.collector.finnhub_client import get_finnhub_client
+
+
+def load_nasdaq_universe() -> List[str]:
+    """
+    Load NASDAQ universe from JSON configuration file.
+
+    Returns:
+        List of ticker symbols from all categories
+    """
+    config_path = Path(__file__).parent.parent.parent / "config" / "nasdaq_universe.json"
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        tickers = []
+        for category in data.get("categories", {}).values():
+            tickers.extend(category)
+
+        # Remove duplicates while preserving order
+        unique_tickers = list(dict.fromkeys(tickers))
+
+        logger.info(f"Loaded {len(unique_tickers)} unique tickers from {config_path}")
+        return unique_tickers
+
+    except Exception as e:
+        logger.error(f"Failed to load NASDAQ universe from {config_path}: {e}")
+        # Return empty list as fallback
+        return []
 
 
 @dataclass
@@ -45,26 +76,8 @@ class TickerSelector:
     This allows UI to display them separately with toggle buttons.
     """
 
-    # NASDAQ 100 + high volume stocks as screening universe
-    NASDAQ_UNIVERSE = [
-        # Mega cap
-        "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AVGO",
-        # Large cap tech
-        "AMD", "INTC", "CSCO", "ADBE", "ORCL", "TXN", "QCOM", "COST", "CMCSA", "PEP",
-        "TMUS", "AMGN", "SBUX", "PYPL", "ABNB", "MRNA", "BKNG", "ADP", "GILD", "ADI",
-        # Mid/Small cap growth
-        "REGN", "ISRG", "PANW", "MU", "LRCX", "KLAC", "SNPS", "CDNS", "ASML", "MELI",
-        "NXPI", "MAR", "ORLY", "CTAS", "DXCM", "WDAY", "IDXX", "MNST", "VRTX", "LULU",
-        "CHTR", "MCHP", "FTNT", "PAYX", "ADSK", "ROST", "FAST", "ODFL", "CPRT", "VRSK",
-        "EA", "PCAR", "KDP", "CTSH", "ANSS", "DLTR", "CSGP", "ILMN", "EBAY", "WBA",
-        # High volatility
-        "BIIB", "ZS", "DDOG", "TEAM", "CRWD", "OKTA", "ZM", "DOCU", "SPLK", "MDB",
-        "NET", "SNOW", "ESTC", "BILL", "RIVN", "LCID", "COIN", "RBLX", "U", "DASH",
-        "HOOD", "SOFI", "PLTR", "UPST", "AFRM", "SQ", "UBER", "LYFT", "ABNB", "SPOT",
-        # Additional high volume
-        "AMAT", "NTES", "MRVL", "BIDU", "JD", "PDD", "NDAQ", "ALGN", "SIRI", "GEHC",
-        "ON", "TTWO", "WBD", "ENPH", "FANG", "SGEN", "VRSN", "ICLR", "BMRN", "SWKS"
-    ]
+    # Load NASDAQ universe from external JSON configuration
+    NASDAQ_UNIVERSE = load_nasdaq_universe()
 
     def __init__(
         self,

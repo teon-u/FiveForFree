@@ -258,14 +258,26 @@ class RealtimePredictor:
         feature_names = self.feature_engineer.get_feature_names()
         X = features_df[feature_names].iloc[-1:].values  # Shape: (1, n_features)
 
+        # For sequence models (LSTM, Transformer), get 60 rows of data
+        sequence_length = 60
+        if len(features_df) >= sequence_length:
+            X_seq = features_df[feature_names].iloc[-sequence_length:].values  # Shape: (60, n_features)
+        else:
+            # If not enough data, use what we have (models will pad internally)
+            X_seq = features_df[feature_names].values
+
         # Step 5: Run predictions
         try:
             # ===== Structure A: Direct Prediction =====
             best_up_type, best_up_model = self.model_manager.get_best_model(ticker, "up")
             best_down_type, best_down_model = self.model_manager.get_best_model(ticker, "down")
 
-            direct_up_prob = best_up_model.predict_proba(X)[0]
-            direct_down_prob = best_down_model.predict_proba(X)[0]
+            # Use X_seq for sequence models (LSTM, Transformer), X for tree models
+            X_up = X_seq if best_up_type in ('lstm', 'transformer') else X
+            X_down = X_seq if best_down_type in ('lstm', 'transformer') else X
+
+            direct_up_prob = best_up_model.predict_proba(X_up)[0]
+            direct_down_prob = best_down_model.predict_proba(X_down)[0]
 
             # Get model precision (more meaningful than overall accuracy)
             # Precision = When model predicts positive, how often is it correct?
@@ -279,7 +291,7 @@ class RealtimePredictor:
 
             # ===== Structure B: Hybrid Prediction (if enabled) =====
             if use_hybrid:
-                hybrid_result = self._predict_hybrid(ticker, X)
+                hybrid_result = self._predict_hybrid(ticker, X, X_seq)
 
                 if hybrid_result is not None:
                     volatility_prob, direction_up_prob, hybrid_up_prob, hybrid_down_prob = hybrid_result
@@ -316,7 +328,7 @@ class RealtimePredictor:
             # Optionally get predictions from all models
             all_predictions = None
             if include_all_models:
-                all_predictions = self._get_all_model_predictions(ticker, X)
+                all_predictions = self._get_all_model_predictions(ticker, X, X_seq)
 
             # Create result
             result = PredictionResult(
@@ -359,27 +371,35 @@ class RealtimePredictor:
     def _predict_hybrid(
         self,
         ticker: str,
-        X: np.ndarray
+        X: np.ndarray,
+        X_seq: np.ndarray = None
     ) -> Optional[Tuple[float, float, float, float]]:
         """
         Generate Structure B hybrid prediction (volatility × direction).
 
         Args:
             ticker: Stock ticker symbol
-            X: Feature vector
+            X: Feature vector for tree models (1, n_features)
+            X_seq: Sequence data for LSTM/Transformer (60, n_features)
 
         Returns:
             Tuple of (volatility_prob, direction_up_prob, hybrid_up_prob, hybrid_down_prob)
             or None if hybrid models not available
         """
+        # If X_seq not provided, fall back to X
+        if X_seq is None:
+            X_seq = X
+
         try:
             # Get volatility model
-            _, vol_model = self.model_manager.get_best_model(ticker, "volatility")
-            volatility_prob = vol_model.predict_proba(X)[0]
+            vol_type, vol_model = self.model_manager.get_best_model(ticker, "volatility")
+            X_vol = X_seq if vol_type in ('lstm', 'transformer') else X
+            volatility_prob = vol_model.predict_proba(X_vol)[0]
 
             # Get direction model
-            _, dir_model = self.model_manager.get_best_model(ticker, "direction")
-            direction_up_prob = dir_model.predict_proba(X)[0]
+            dir_type, dir_model = self.model_manager.get_best_model(ticker, "direction")
+            X_dir = X_seq if dir_type in ('lstm', 'transformer') else X
+            direction_up_prob = dir_model.predict_proba(X_dir)[0]
 
             # Calculate hybrid probabilities
             # P(+5% up) = P(volatility) × P(direction=up | volatility)
@@ -609,19 +629,25 @@ class RealtimePredictor:
     def _get_all_model_predictions(
         self,
         ticker: str,
-        X: np.ndarray
+        X: np.ndarray,
+        X_seq: np.ndarray = None
     ) -> Dict[str, Dict[str, float]]:
         """
         Get predictions from all available models (Structure A + B).
 
         Args:
             ticker: Stock ticker symbol
-            X: Feature vector
+            X: Feature vector for tree models (1, n_features)
+            X_seq: Sequence data for LSTM/Transformer (60, n_features)
 
         Returns:
             Nested dictionary: {target: {model_type: probability}}
         """
         all_predictions = {}
+
+        # If X_seq not provided, fall back to X
+        if X_seq is None:
+            X_seq = X
 
         # Structure A targets
         for target in settings.PREDICTION_TARGETS:
@@ -633,7 +659,12 @@ class RealtimePredictor:
                 for model_type, model in models.items():
                     if model.is_trained:
                         try:
-                            prob = model.predict_proba(X)[0]
+                            # Use X_seq for sequence models, X for tree models
+                            X_input = X_seq if model_type in ('lstm', 'transformer') else X
+                            prob = model.predict_proba(X_input)
+                            # Handle both scalar (LSTM/Transformer) and array (tree models) returns
+                            if hasattr(prob, '__len__'):
+                                prob = prob[0]
                             precision = model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
                             all_predictions[target][model_type] = {
@@ -656,7 +687,12 @@ class RealtimePredictor:
                     for model_type, model in models.items():
                         if model.is_trained:
                             try:
-                                prob = model.predict_proba(X)[0]
+                                # Use X_seq for sequence models, X for tree models
+                                X_input = X_seq if model_type in ('lstm', 'transformer') else X
+                                prob = model.predict_proba(X_input)
+                            # Handle both scalar (LSTM/Transformer) and array (tree models) returns
+                            if hasattr(prob, '__len__'):
+                                prob = prob[0]
                                 precision = model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
                                 all_predictions[target][model_type] = {

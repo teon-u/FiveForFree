@@ -218,9 +218,11 @@ class TransformerModel(BaseModel):
 
         # Handle single sample or batch
         if len(X_scaled) < self.sequence_length:
-            # Pad with zeros if needed
-            padded = np.zeros((self.sequence_length, X_scaled.shape[-1]))
-            padded[-len(X_scaled):] = X_scaled
+            # Pad by repeating first value instead of zeros (zeros cause meaningless predictions)
+            first_value = X_scaled[0:1]  # Shape: (1, n_features)
+            needed = self.sequence_length - len(X_scaled)
+            padding = np.repeat(first_value, needed, axis=0)  # Shape: (needed, n_features)
+            padded = np.vstack([padding, X_scaled])  # Shape: (sequence_length, n_features)
             X_seq = padded.reshape(1, self.sequence_length, -1)
         else:
             X_seq = self._prepare_sequences(X_scaled)
