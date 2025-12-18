@@ -9,7 +9,7 @@ sys.path.insert(0, str(project_root))
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from config.settings import settings
 from src.utils.database import get_db, MinuteBar as DBMinuteBar
@@ -44,9 +44,21 @@ def main():
 
     for i, ticker in enumerate(tickers, 1):
         try:
-            # Load recent data (last 7 days for backtest)
-            cutoff_date = datetime.now() - timedelta(days=7)
+            # Load ALL available data for this ticker (use last 60 days for more samples)
+            cutoff_date = datetime.now() - timedelta(days=60)
             with get_db() as db:
+                # First check how much data is available
+                count_stmt = (
+                    select(func.count(DBMinuteBar.id))
+                    .where(DBMinuteBar.symbol == ticker)
+                )
+                total_bars = db.execute(count_stmt).scalar() or 0
+
+                if total_bars < 500:
+                    print(f"  {ticker}: Only {total_bars} bars, skipping...")
+                    continue
+
+                # Get recent data for backtest
                 stmt = (
                     select(DBMinuteBar)
                     .where(DBMinuteBar.symbol == ticker)
@@ -54,6 +66,16 @@ def main():
                     .order_by(DBMinuteBar.timestamp)
                 )
                 bars = db.execute(stmt).scalars().all()
+
+                # If not enough recent data, get the most recent N bars
+                if len(bars) < 500:
+                    stmt = (
+                        select(DBMinuteBar)
+                        .where(DBMinuteBar.symbol == ticker)
+                        .order_by(DBMinuteBar.timestamp.desc())
+                        .limit(15000)  # Get up to ~60 days of 5-min bars
+                    )
+                    bars = list(reversed(db.execute(stmt).scalars().all()))
 
                 df = pd.DataFrame(
                     [
@@ -70,7 +92,8 @@ def main():
                     ]
                 )
 
-            if len(df) < 200:
+            if len(df) < 500:
+                print(f"  {ticker}: {len(df)} bars after query, skipping...")
                 continue
 
             # Generate features
@@ -82,8 +105,10 @@ def main():
             labels_down = []
             timestamps = []
 
-            # Use every 60th bar for predictions (hourly)
-            for idx in range(0, len(df) - settings.PREDICTION_HORIZON_MINUTES - 1, 60):
+            # Use every 15th bar for predictions (15-minute intervals for more samples)
+            # This gives us 4x more data points than hourly predictions
+            BACKTEST_INTERVAL = 15  # bars (= 15 minutes with 1-min bars, or 75 min with 5-min bars)
+            for idx in range(0, len(df) - settings.PREDICTION_HORIZON_MINUTES - 1, BACKTEST_INTERVAL):
                 entry_time = df.iloc[idx]["timestamp"]
                 entry_price = df.iloc[idx]["close"]
                 labels = label_generator.generate_labels(df, entry_time, entry_price)
@@ -91,11 +116,12 @@ def main():
                 labels_down.append(labels["label_down"])
                 timestamps.append(entry_time)
 
-            if len(labels_up) < 10:
+            if len(labels_up) < 20:
+                print(f"  {ticker}: Only {len(labels_up)} labels, skipping...")
                 continue
 
             # Align features and labels
-            feature_indices = list(range(0, len(df) - settings.PREDICTION_HORIZON_MINUTES - 1, 60))[:len(labels_up)]
+            feature_indices = list(range(0, len(df) - settings.PREDICTION_HORIZON_MINUTES - 1, BACKTEST_INTERVAL))[:len(labels_up)]
             X = features_df[feature_names].values[feature_indices]
             y_up = np.array(labels_up)
             y_down = np.array(labels_down)
@@ -107,8 +133,11 @@ def main():
             y_down = y_down[valid_mask]
             timestamps = [t for t, v in zip(timestamps, valid_mask) if v]
 
-            if len(X) < 10:
+            if len(X) < 20:
+                print(f"  {ticker}: Only {len(X)} valid samples after NaN removal, skipping...")
                 continue
+
+            print(f"  [{i}/{len(tickers)}] {ticker}: {len(X)} samples for backtest...")
 
             ticker_predictions = 0
 

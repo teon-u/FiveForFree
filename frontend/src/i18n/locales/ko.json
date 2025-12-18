@@ -35,6 +35,18 @@
     "filterDown": "하락만",
     "close": "닫기"
   },
+  "status": {
+    "title": "시스템 상태",
+    "trainedTickers": "학습된 종목",
+    "dataRange": "데이터 범위",
+    "coverage": "모델 커버리지",
+    "newGainers": "새로 발견된 상승 종목",
+    "noNewGainers": "새로운 종목이 없습니다",
+    "train": "학습",
+    "training": "학습 중...",
+    "trained": "학습 완료",
+    "refresh": "새로고침"
+  },
   "grade": {
     "excellent": "최적",
     "good": "양호",
