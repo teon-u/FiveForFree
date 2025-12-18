@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 import { t } from '../i18n'
+import { endpoints } from '../services/api'
 
 export default function SettingsPanel({ onClose }) {
   const {
@@ -12,6 +14,41 @@ export default function SettingsPanel({ onClose }) {
   } = useSettingsStore()
 
   const tr = t(language)
+
+  // System status state
+  const [systemStatus, setSystemStatus] = useState(null)
+  const [loadingStatus, setLoadingStatus] = useState(false)
+  const [trainingTickers, setTrainingTickers] = useState({})
+
+  // Fetch system status on mount
+  useEffect(() => {
+    fetchSystemStatus()
+  }, [])
+
+  const fetchSystemStatus = async () => {
+    setLoadingStatus(true)
+    try {
+      const response = await endpoints.getSystemStatus()
+      setSystemStatus(response.data)
+    } catch (error) {
+      console.error('Failed to fetch system status:', error)
+    } finally {
+      setLoadingStatus(false)
+    }
+  }
+
+  const handleTrainTicker = async (ticker) => {
+    setTrainingTickers(prev => ({ ...prev, [ticker]: 'training' }))
+    try {
+      await endpoints.trainTicker(ticker)
+      setTrainingTickers(prev => ({ ...prev, [ticker]: 'trained' }))
+      // Refresh status after training
+      setTimeout(fetchSystemStatus, 2000)
+    } catch (error) {
+      console.error('Failed to train ticker:', error)
+      setTrainingTickers(prev => ({ ...prev, [ticker]: 'error' }))
+    }
+  }
 
   return (
     <>
@@ -129,6 +166,98 @@ export default function SettingsPanel({ onClose }) {
             <p className="text-xs text-gray-400 mt-2">
               {language === 'ko' ? '특정 방향의 예측만 표시합니다' : 'Show only specific prediction directions'}
             </p>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-surface-light" />
+
+          {/* System Status Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm text-gray-300">
+                {tr('status.title')}
+              </h3>
+              <button
+                onClick={fetchSystemStatus}
+                disabled={loadingStatus}
+                className="text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-500"
+              >
+                {loadingStatus ? '...' : tr('status.refresh')}
+              </button>
+            </div>
+
+            {systemStatus && (
+              <div className="bg-surface-light rounded-lg p-4 space-y-3">
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-gray-400">{tr('status.trainedTickers')}:</span>
+                    <span className="ml-2 text-white font-semibold">{systemStatus.trained_tickers}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">{tr('status.coverage')}:</span>
+                    <span className="ml-2 text-green-400 font-semibold">{systemStatus.model_coverage}%</span>
+                  </div>
+                </div>
+
+                {/* Data Range */}
+                {systemStatus.data_date_range && (
+                  <div className="text-xs text-gray-400">
+                    {tr('status.dataRange')}: {systemStatus.data_date_range.start?.split('T')[0]} ~ {systemStatus.data_date_range.end?.split('T')[0]}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* New Gainers */}
+            {systemStatus?.new_gainers?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-yellow-400">
+                  🔥 {tr('status.newGainers')} ({systemStatus.new_gainers.length})
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {systemStatus.new_gainers.map((gainer) => (
+                    <div
+                      key={gainer.ticker}
+                      className="flex items-center justify-between bg-surface rounded-lg p-3 border border-surface-light"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{gainer.ticker}</span>
+                          <span className="text-green-400 text-sm">+{gainer.change_percent?.toFixed(1)}%</span>
+                        </div>
+                        <div className="text-xs text-gray-400 truncate max-w-[180px]">
+                          {gainer.name}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleTrainTicker(gainer.ticker)}
+                        disabled={trainingTickers[gainer.ticker] === 'training' || trainingTickers[gainer.ticker] === 'trained'}
+                        className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                          trainingTickers[gainer.ticker] === 'trained'
+                            ? 'bg-green-500/20 text-green-400 cursor-default'
+                            : trainingTickers[gainer.ticker] === 'training'
+                            ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                      >
+                        {trainingTickers[gainer.ticker] === 'trained'
+                          ? tr('status.trained')
+                          : trainingTickers[gainer.ticker] === 'training'
+                          ? tr('status.training')
+                          : tr('status.train')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {systemStatus && (!systemStatus.new_gainers || systemStatus.new_gainers.length === 0) && (
+              <div className="text-xs text-gray-400 italic">
+                {tr('status.noNewGainers')}
+              </div>
+            )}
           </div>
 
           {/* Divider */}

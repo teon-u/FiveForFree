@@ -35,6 +35,18 @@
     "filterDown": "Down Only",
     "close": "Close"
   },
+  "status": {
+    "title": "System Status",
+    "trainedTickers": "Trained Tickers",
+    "dataRange": "Data Range",
+    "coverage": "Model Coverage",
+    "newGainers": "Newly Discovered Gainers",
+    "noNewGainers": "No new tickers found",
+    "train": "Train",
+    "training": "Training...",
+    "trained": "Trained",
+    "refresh": "Refresh"
+  },
   "grade": {
     "excellent": "Excellent",
     "good": "Good",

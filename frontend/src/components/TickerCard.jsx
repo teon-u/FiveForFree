@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import clsx from 'clsx'
+import { usePriceStore } from '../stores/priceStore'
 
 export default function TickerCard({ prediction, onClick, onDetailClick }) {
   const {
@@ -11,6 +13,24 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
     signal_rate,
     practicality_grade,
   } = prediction
+
+  // Get real-time price from store
+  const priceData = usePriceStore((state) => state.prices[ticker])
+  const clearPriceChanged = usePriceStore((state) => state.clearPriceChanged)
+
+  // Use real-time change_percent if available, otherwise use prediction data
+  const displayChangePercent = priceData?.change_percent ?? change_percent
+  const displayPrice = priceData?.price
+
+  // Clear the price changed flag after animation
+  useEffect(() => {
+    if (priceData?.priceChanged) {
+      const timer = setTimeout(() => {
+        clearPriceChanged(ticker)
+      }, 1000) // Flash animation duration
+      return () => clearTimeout(timer)
+    }
+  }, [priceData?.priceChanged, ticker, clearPriceChanged])
 
   // Determine card style based on probability and direction
   const getCardStyle = () => {
@@ -70,12 +90,26 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
         {probability.toFixed(0)}% {direction === 'up' ? '↑' : '↓'}
       </div>
 
-      {/* Change Percent */}
-      <div className={clsx(
-        'text-sm mb-2',
-        change_percent >= 0 ? 'text-green-400' : 'text-red-400'
-      )}>
-        {change_percent >= 0 ? '+' : ''}{change_percent.toFixed(2)}%
+      {/* Price & Change Percent */}
+      <div className="mb-2 space-y-0.5">
+        {/* Real-time price with flash animation */}
+        {displayPrice && (
+          <div className={clsx(
+            'text-sm font-semibold transition-all duration-300',
+            priceData?.priceChanged && priceData?.priceDirection === 'up' && 'animate-flash-green',
+            priceData?.priceChanged && priceData?.priceDirection === 'down' && 'animate-flash-red',
+            !priceData?.priceChanged && 'text-gray-300'
+          )}>
+            ${displayPrice.toFixed(2)}
+          </div>
+        )}
+        {/* Change percent */}
+        <div className={clsx(
+          'text-sm',
+          displayChangePercent >= 0 ? 'text-green-400' : 'text-red-400'
+        )}>
+          {displayChangePercent >= 0 ? '+' : ''}{displayChangePercent.toFixed(2)}%
+        </div>
       </div>
 
       {/* Model Info */}

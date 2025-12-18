@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { usePriceStore } from '../stores/priceStore'
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false)
@@ -7,6 +8,8 @@ export function useWebSocket() {
   const wsRef = useRef(null)
   const queryClient = useQueryClient()
   const reconnectTimeoutRef = useRef(null)
+  const updatePrices = usePriceStore((state) => state.updatePrices)
+  const setConnected = usePriceStore((state) => state.setConnected)
 
   useEffect(() => {
     const connect = () => {
@@ -20,6 +23,7 @@ export function useWebSocket() {
         ws.onopen = () => {
           console.log('WebSocket connected')
           setIsConnected(true)
+          setConnected(true)
         }
 
         ws.onmessage = (event) => {
@@ -35,11 +39,31 @@ export function useWebSocket() {
                 setLastUpdate(new Date().toISOString())
                 break
 
+              case 'prediction_update':
+                // Single ticker prediction update
+                if (data.ticker) {
+                  queryClient.invalidateQueries({ queryKey: ['models', data.ticker] })
+                }
+                setLastUpdate(new Date().toISOString())
+                break
+
+              case 'price_update':
+                // Real-time price updates from backend
+                if (data.prices && Array.isArray(data.prices)) {
+                  updatePrices(data.prices, data.timestamp)
+                }
+                break
+
               case 'ticker_update':
                 // Invalidate specific ticker data
                 if (data.ticker) {
                   queryClient.invalidateQueries({ queryKey: ['models', data.ticker] })
                 }
+                break
+
+              case 'connected':
+                // Welcome message from server
+                console.log('Server:', data.message)
                 break
 
               case 'heartbeat':
@@ -61,6 +85,7 @@ export function useWebSocket() {
         ws.onclose = () => {
           console.log('WebSocket disconnected')
           setIsConnected(false)
+          setConnected(false)
 
           // Attempt to reconnect after 5 seconds
           reconnectTimeoutRef.current = setTimeout(() => {

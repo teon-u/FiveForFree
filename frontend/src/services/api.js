@@ -78,6 +78,12 @@ export const endpoints = {
   // Settings
   getSettings: () => api.get('/settings'),
   updateSettings: (data) => api.post('/settings', data),
+
+  // System Status
+  getSystemStatus: () => api.get('/status'),
+  discoverNewTickers: () => api.get('/status/discover'),
+  trainTicker: (ticker) => api.post(`/status/train/${ticker}`),
+  getTrainingStatus: () => api.get('/status/training'),
 }
 
 export default api
