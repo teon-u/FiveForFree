@@ -4,7 +4,13 @@
     "live": "Live",
     "disconnected": "Disconnected",
     "settings": "Settings",
-    "footer": "Real-time predictions using 5 ML models | Data from Polygon.io | Updates every minute"
+    "footer": "Real-time predictions using 5 ML models | Data from Polygon.io | Updates every minute",
+    "marketClosed": "Market Closed",
+    "marketOpen": "Market Open",
+    "lastClose": "Last Close",
+    "weekend": "Weekend",
+    "preMarket": "Pre-market",
+    "afterHours": "After-hours"
   },
   "dashboard": {
     "gainers": "Gainers",
@@ -56,5 +62,88 @@
   "direction": {
     "up": "UP",
     "down": "DOWN"
+  },
+  "modal": {
+    "subtitle": "Model Performance Analysis",
+    "loading": "Loading model data...",
+    "tabs": {
+      "overview": "Overview",
+      "performance": "Performance",
+      "ensemble": "Ensemble",
+      "financial": "Financial"
+    }
+  },
+  "overview": {
+    "currentPrediction": "Current Prediction",
+    "direction": "Direction",
+    "bestModel": "Best Model",
+    "expectedMove": "Expected Move",
+    "riskLevel": "Risk Level",
+    "modelRanking": "Model Ranking (Precision + Signal Rate)",
+    "model": "Model",
+    "precision": "Precision",
+    "signalRate": "Signal Rate",
+    "signals": "Signals",
+    "grade": "Grade",
+    "noModelData": "No model data available",
+    "gradeDesc": "Grade",
+    "quickStats": "Quick Stats",
+    "accuracy": "Accuracy",
+    "winRate": "Win Rate",
+    "avgReturn": "Avg Return",
+    "sharpeRatio": "Sharpe Ratio",
+    "riskIndicators": "Risk Indicators",
+    "fpRate": "False Positive Rate",
+    "modelAgreement": "Model Agreement",
+    "recentPerformance": "Recent Performance",
+    "investmentSignal": "Investment Signal",
+    "riskLow": "Strong signal detected. Model shows high confidence with strong agreement among models.",
+    "riskModerate": "Moderate signal. Consider position sizing carefully.",
+    "riskHigh": "Weak signal. High risk detected. Consider waiting for better setup."
+  },
+  "financial": {
+    "equityCurve": "Equity Curve",
+    "simulatedBacktest": "Simulated backtest performance",
+    "totalReturn": "Total Return",
+    "riskMetrics": "Risk Metrics",
+    "sharpeRatio": "Sharpe Ratio",
+    "sortinoRatio": "Sortino Ratio",
+    "calmarRatio": "Calmar Ratio",
+    "maxDrawdown": "Max Drawdown",
+    "tradeStats": "Trade Statistics",
+    "totalTrades": "Total Trades",
+    "winRate": "Win Rate",
+    "profitFactor": "Profit Factor",
+    "avgWin": "Avg Win",
+    "avgLoss": "Avg Loss",
+    "bestTrade": "Best Trade",
+    "worstTrade": "Worst Trade",
+    "avgReturn": "Average Return",
+    "tradeDistribution": "Trade Distribution",
+    "distributionDesc": "Distribution of returns across all trades",
+    "recentTrades": "Recent Trades",
+    "lastNTrades": "Last {n} trades (most recent first)",
+    "time": "Time",
+    "return": "Return",
+    "probability": "Probability",
+    "result": "Result",
+    "win": "Win",
+    "loss": "Loss",
+    "simulatedNote": "Simulated Backtest",
+    "simulatedDesc": "This is a simplified backtest simulation. Actual trading results may vary based on market conditions, entry/exit timing, and slippage."
+  },
+  "performance": {
+    "modelComparison": "Model Comparison",
+    "precision": "Precision",
+    "recall": "Recall",
+    "status": "Status",
+    "notTrained": "Not Trained",
+    "trained": "Trained",
+    "training": "Training"
+  },
+  "ensemble": {
+    "modelWeights": "Model Weights",
+    "correlationMatrix": "Correlation Matrix",
+    "ensembleSettings": "Ensemble Settings"
   }
 }

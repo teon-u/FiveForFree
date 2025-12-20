@@ -444,7 +444,20 @@ async def get_categorized_predictions(
                 if direction in performances and best_model in performances[direction]:
                     model_perf = performances[direction][best_model]
                     signal_rate = model_perf.get('signal_rate', 0.0)
-                    practicality_grade = model_perf.get('practicality_grade', 'D')
+                    # Use precision from model_perf for consistency
+                    precision = model_perf.get('precision', 0.0)
+                    # Recalculate grade based on actual precision and signal_rate
+                    # to ensure consistency (A: prec>=50% & sig>=10%, B: prec>=30% & sig>=10%, C: prec>=30%, D: else)
+                    if precision >= 0.50 and signal_rate >= 0.10:
+                        practicality_grade = 'A'
+                    elif precision >= 0.30 and signal_rate >= 0.10:
+                        practicality_grade = 'B'
+                    elif precision >= 0.30:
+                        practicality_grade = 'C'
+                    else:
+                        practicality_grade = 'D'
+                    # Also update hit_rate to match precision from same source
+                    hit_rate = precision
             except Exception:
                 pass  # Use defaults if unable to get performance data
 

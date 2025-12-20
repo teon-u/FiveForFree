@@ -5,9 +5,13 @@ import OverviewTab from './OverviewTab'
 import PerformanceTab from './PerformanceTab'
 import EnsembleTab from './EnsembleTab'
 import FinancialTab from './FinancialTab'
+import { useSettingsStore } from '../stores/settingsStore'
+import { t } from '../i18n'
 
 export default function ModelDetailModal({ ticker, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
+  const { language } = useSettingsStore()
+  const tr = t(language)
 
   // Close on Escape key
   useEffect(() => {
@@ -55,7 +59,7 @@ export default function ModelDetailModal({ ticker, onClose }) {
   const { data: financialData, isLoading: financialLoading } = useQuery({
     queryKey: ['model-financial', ticker],
     queryFn: async () => {
-      const response = await api.get(`/models/${ticker}/financial`)
+      const response = await api.get(`/models/${ticker}/financial?hours=500`)
       return response.data
     },
     enabled: !!ticker && activeTab === 'financial',
@@ -68,10 +72,10 @@ export default function ModelDetailModal({ ticker, onClose }) {
                      financialLoading
 
   const tabs = [
-    { id: 'overview', label: '📊 Overview', icon: '📊' },
-    { id: 'performance', label: '📈 Performance', icon: '📈' },
-    { id: 'ensemble', label: '🎭 Ensemble', icon: '🎭' },
-    { id: 'financial', label: '💰 Financial', icon: '💰' },
+    { id: 'overview', label: tr('modal.tabs.overview'), icon: '📊' },
+    { id: 'performance', label: tr('modal.tabs.performance'), icon: '📈' },
+    { id: 'ensemble', label: tr('modal.tabs.ensemble'), icon: '🎭' },
+    { id: 'financial', label: tr('modal.tabs.financial'), icon: '💰' },
   ]
 
   return (
@@ -95,7 +99,7 @@ export default function ModelDetailModal({ ticker, onClose }) {
                 <div>
                   <h2 className="text-2xl font-bold text-white">{ticker}</h2>
                   <p className="text-sm text-gray-400 mt-1">
-                    Model Performance Analysis
+                    {tr('modal.subtitle')}
                   </p>
                 </div>
                 <button
@@ -147,22 +151,22 @@ export default function ModelDetailModal({ ticker, onClose }) {
                 <div className="flex items-center justify-center min-h-[400px]">
                   <div className="text-center">
                     <div className="spinner mb-4" />
-                    <p className="text-gray-400">Loading model data...</p>
+                    <p className="text-gray-400">{tr('modal.loading')}</p>
                   </div>
                 </div>
               ) : (
                 <>
                   {activeTab === 'overview' && overviewData && (
-                    <OverviewTab data={overviewData} ticker={ticker} />
+                    <OverviewTab data={overviewData} ticker={ticker} tr={tr} />
                   )}
                   {activeTab === 'performance' && performanceData && (
-                    <PerformanceTab data={performanceData} ticker={ticker} />
+                    <PerformanceTab data={performanceData} ticker={ticker} tr={tr} />
                   )}
                   {activeTab === 'ensemble' && ensembleData && (
-                    <EnsembleTab data={ensembleData} ticker={ticker} />
+                    <EnsembleTab data={ensembleData} ticker={ticker} tr={tr} />
                   )}
                   {activeTab === 'financial' && financialData && (
-                    <FinancialTab data={financialData} ticker={ticker} />
+                    <FinancialTab data={financialData} ticker={ticker} tr={tr} />
                   )}
                 </>
               )}

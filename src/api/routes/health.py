@@ -26,6 +26,8 @@ class MarketStatus(BaseModel):
     current_time_et: str = Field(..., description="Current time in ET")
     market_open: str = Field(..., description="Market open time")
     market_close: str = Field(..., description="Market close time")
+    last_close_et: str = Field(..., description="Last market close time in ET")
+    last_close_iso: str = Field(..., description="Last market close time in ISO format")
     reason: Optional[str] = Field(None, description="Reason if market is closed")
 
 

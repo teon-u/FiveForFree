@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 from typing import Set, List, Optional, Dict, Any
 from datetime import datetime
 
@@ -9,6 +10,30 @@ from fastapi import WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from src.predictor.realtime_predictor import RealtimePredictor
+
+
+def sanitize_for_json(obj):
+    """
+    Replace NaN/Inf values with None for JSON serialization.
+
+    JSON doesn't support NaN or Infinity values, so we convert them to None.
+    This prevents serialization errors when broadcasting prediction data.
+
+    Args:
+        obj: Object to sanitize (dict, list, float, or other type)
+
+    Returns:
+        Sanitized object safe for JSON serialization
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    return obj
 
 
 class ConnectionManager:
@@ -255,22 +280,24 @@ async def process_client_message(
         ticker = message.get("ticker", "").upper()
         if ticker:
             try:
-                result = predictor.predict(ticker, include_all_models=False)
+                result = predictor.predict(ticker, include_all_models=True)
+                prediction_data = {
+                    "type": "prediction",
+                    "ticker": result.ticker,
+                    "timestamp": result.timestamp.isoformat(),
+                    "current_price": result.current_price,
+                    "up_probability": result.up_probability,
+                    "down_probability": result.down_probability,
+                    "best_up_model": result.best_up_model,
+                    "best_down_model": result.best_down_model,
+                    "up_model_accuracy": result.up_model_accuracy,
+                    "down_model_accuracy": result.down_model_accuracy,
+                    "trading_signal": result.get_trading_signal(),
+                    "confidence_level": result.get_confidence_level(),
+                }
+                # Sanitize before sending to prevent NaN serialization errors
                 await manager.send_personal_message(
-                    {
-                        "type": "prediction",
-                        "ticker": result.ticker,
-                        "timestamp": result.timestamp.isoformat(),
-                        "current_price": result.current_price,
-                        "up_probability": result.up_probability,
-                        "down_probability": result.down_probability,
-                        "best_up_model": result.best_up_model,
-                        "best_down_model": result.best_down_model,
-                        "up_model_accuracy": result.up_model_accuracy,
-                        "down_model_accuracy": result.down_model_accuracy,
-                        "trading_signal": result.get_trading_signal(),
-                        "confidence_level": result.get_confidence_level(),
-                    },
+                    sanitize_for_json(prediction_data),
                     websocket,
                 )
             except Exception as e:
@@ -327,9 +354,10 @@ async def broadcast_predictions(
                 logger.debug(f"Broadcasting predictions for {len(tickers)} tickers")
 
                 # Generate predictions for all tickers
+                # include_all_models=True enables recording for all models for accuracy tracking
                 results = predictor.predict_batch(
                     tickers=tickers,
-                    include_all_models=False,
+                    include_all_models=True,
                     include_features=False,
                 )
 
@@ -350,8 +378,9 @@ async def broadcast_predictions(
                         "confidence_level": result.get_confidence_level(),
                     }
 
+                    # Sanitize before broadcasting to prevent NaN serialization errors
                     await manager.broadcast_to_ticker_subscribers(
-                        ticker, prediction_message
+                        ticker, sanitize_for_json(prediction_message)
                     )
 
                 logger.debug(f"Broadcast complete for {len(results)} predictions")
@@ -407,11 +436,22 @@ async def broadcast_price_updates(
 
                             if ticker_data is not None and not ticker_data.empty:
                                 latest = ticker_data.iloc[-1]
-                                current_price = float(latest['Close'])
+                                raw_close = latest['Close']
+
+                                # Skip NaN/None prices (JSON doesn't support NaN)
+                                if raw_close is None or (hasattr(raw_close, '__float__') and math.isnan(float(raw_close))):
+                                    continue
+                                current_price = float(raw_close)
+                                if math.isnan(current_price):
+                                    continue
 
                                 # Calculate change from open
-                                open_price = float(ticker_data.iloc[0]['Open'])
-                                if open_price > 0 and not math.isnan(open_price) and not math.isnan(current_price):
+                                raw_open = ticker_data.iloc[0]['Open']
+                                if raw_open is None or (hasattr(raw_open, '__float__') and math.isnan(float(raw_open))):
+                                    open_price = current_price  # fallback to current price
+                                else:
+                                    open_price = float(raw_open)
+                                if open_price > 0 and not math.isnan(open_price):
                                     change_percent = ((current_price - open_price) / open_price) * 100
                                 else:
                                     change_percent = 0.0

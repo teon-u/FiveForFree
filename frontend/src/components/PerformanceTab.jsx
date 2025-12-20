@@ -14,8 +14,10 @@ import {
   ReferenceLine,
 } from 'recharts'
 
-export default function PerformanceTab({ data, ticker }) {
+export default function PerformanceTab({ data, ticker, tr }) {
   const { confusion_matrix, metrics, roc_curve, pr_curve, time_series, calibration } = data
+  // Use translation if provided, otherwise use default English
+  const t = tr || ((key) => key.split('.').pop())
 
   // Prepare ROC curve data
   const rocData = roc_curve.fpr && roc_curve.tpr ? roc_curve.fpr.map((fpr, i) => ({
@@ -142,7 +144,7 @@ export default function PerformanceTab({ data, ticker }) {
             <h4 className="font-semibold text-white mb-4">
               ROC Curve
               <span className="ml-2 text-sm font-normal text-gray-400">
-                (AUC: {roc_curve.auc ? roc_curve.auc.toFixed(3) : '0.000'})
+                (AUC: {roc_curve.insufficient_data ? 'N/A' : (roc_curve.auc ? roc_curve.auc.toFixed(3) : '0.000')})
               </span>
             </h4>
             {rocData.length > 0 ? (
@@ -178,12 +180,16 @@ export default function PerformanceTab({ data, ticker }) {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-gray-400">
-                No data available
+              <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+                <span>No data available</span>
+                {roc_curve.insufficient_data && (
+                  <span className="text-xs mt-2">⚠️ Requires 10+ samples (current: {roc_curve.sample_count || 0})</span>
+                )}
               </div>
             )}
             <p className="text-xs text-gray-400 mt-2 text-center">
-              {roc_curve.auc >= 0.9 ? '🟢 Excellent' :
+              {roc_curve.insufficient_data ? '⚠️ Insufficient data for evaluation' :
+               roc_curve.auc >= 0.9 ? '🟢 Excellent' :
                roc_curve.auc >= 0.8 ? '🟡 Good' :
                roc_curve.auc >= 0.7 ? '🟠 Fair' : '🔴 Poor'}
             </p>
@@ -194,7 +200,7 @@ export default function PerformanceTab({ data, ticker }) {
             <h4 className="font-semibold text-white mb-4">
               Precision-Recall Curve
               <span className="ml-2 text-sm font-normal text-gray-400">
-                (AP: {pr_curve.average_precision ? pr_curve.average_precision.toFixed(3) : '0.000'})
+                (AP: {pr_curve.insufficient_data ? 'N/A' : (pr_curve.average_precision ? pr_curve.average_precision.toFixed(3) : '0.000')})
               </span>
             </h4>
             {prData.length > 0 ? (
@@ -224,12 +230,16 @@ export default function PerformanceTab({ data, ticker }) {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-gray-400">
-                No data available
+              <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+                <span>No data available</span>
+                {pr_curve.insufficient_data && (
+                  <span className="text-xs mt-2">⚠️ Requires 10+ samples (current: {pr_curve.sample_count || 0})</span>
+                )}
               </div>
             )}
             <p className="text-xs text-gray-400 mt-2 text-center">
-              {pr_curve.average_precision >= 0.9 ? '🟢 Excellent' :
+              {pr_curve.insufficient_data ? '⚠️ Insufficient data for evaluation' :
+               pr_curve.average_precision >= 0.9 ? '🟢 Excellent' :
                pr_curve.average_precision >= 0.8 ? '🟡 Good' :
                pr_curve.average_precision >= 0.7 ? '🟠 Fair' : '🔴 Poor'}
             </p>
@@ -294,7 +304,7 @@ export default function PerformanceTab({ data, ticker }) {
           <span className="mr-2">🎯</span>
           Probability Calibration
           <span className="ml-2 text-sm font-normal text-gray-400">
-            (Score: {calibration.calibration_score ? (calibration.calibration_score * 100).toFixed(1) : '0.0'}%)
+            (Score: {calibration.insufficient_data ? 'N/A' : (calibration.calibration_score ? (calibration.calibration_score * 100).toFixed(1) : '0.0')}%)
           </span>
         </h3>
         <div className="bg-surface-light rounded-lg p-6 border border-surface-lighter">
@@ -346,12 +356,16 @@ export default function PerformanceTab({ data, ticker }) {
               </ScatterChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              No calibration data available
+            <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
+              <span>No calibration data available</span>
+              {calibration.insufficient_data && (
+                <span className="text-xs mt-2">⚠️ Requires 10+ samples (current: {calibration.sample_count || 0})</span>
+              )}
             </div>
           )}
           <p className="text-sm text-gray-400 mt-4 text-center">
-            {calibration.calibration_score >= 0.9 ? '✓ Well-calibrated (probabilities are reliable)' :
+            {calibration.insufficient_data ? '⚠️ Insufficient data for calibration evaluation' :
+             calibration.calibration_score >= 0.9 ? '✓ Well-calibrated (probabilities are reliable)' :
              calibration.calibration_score >= 0.8 ? '⚠️ Moderately calibrated (use with caution)' :
              '❌ Poorly calibrated (probabilities may be misleading)'}
           </p>

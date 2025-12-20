@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Prediction Settings
     PREDICTION_HORIZON_MINUTES: int = 60
     TARGET_PERCENT: float = 1.0
-    PROBABILITY_THRESHOLD: float = 0.70
+    PROBABILITY_THRESHOLD: float = 0.10  # Lowered for rare events (5% moves)
 
     # Backtesting
     BACKTEST_HOURS: int = 50
@@ -43,10 +43,14 @@ class Settings(BaseSettings):
         "http://localhost:3000",  # Common React dev server
         "http://localhost:3001",  # Vite fallback port
         "http://localhost:3002",  # Vite fallback port 2
+        "http://localhost:3003",  # Vite fallback port 3
+        "http://localhost:3004",  # Vite fallback port 4
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
         "http://127.0.0.1:3002",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3004",
         "http://localhost:8080",  # Alternative dev server
         "http://127.0.0.1:8080",
     ]

@@ -2,10 +2,16 @@ import { useState } from 'react'
 import Dashboard from './components/Dashboard'
 import SettingsPanel from './components/SettingsPanel'
 import { useWebSocket } from './hooks/useWebSocket'
+import { useMarketStatus } from './hooks/useMarketStatus'
+import { useSettingsStore } from './stores/settingsStore'
+import { t } from './i18n'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const { isConnected, lastUpdate } = useWebSocket()
+  const { isMarketOpen, lastCloseKst, reason } = useMarketStatus()
+  const { language } = useSettingsStore()
+  const tr = t(language)
 
   return (
     <div className="min-h-screen bg-background text-white">
@@ -26,6 +32,26 @@ function App() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Market Status Indicator */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                isMarketOpen
+                  ? 'bg-green-500/20 border border-green-500/30'
+                  : 'bg-yellow-500/20 border border-yellow-500/30'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  isMarketOpen ? 'bg-green-500' : 'bg-yellow-500'
+                } animate-pulse`} />
+                <span className={`text-sm font-medium ${
+                  isMarketOpen ? 'text-green-400' : 'text-yellow-400'
+                }`}>
+                  {isMarketOpen ? tr('app.marketOpen') : tr('app.marketClosed')}
+                </span>
+                {!isMarketOpen && lastCloseKst && (
+                  <span className="text-xs text-gray-400">
+                    ({tr('app.lastClose')}: {lastCloseKst} KST)
+                  </span>
+                )}
+              </div>
               {lastUpdate && (
                 <span className="text-sm text-gray-400">
                   Updated: {new Date(lastUpdate).toLocaleTimeString()}
