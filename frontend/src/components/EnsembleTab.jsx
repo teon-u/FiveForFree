@@ -15,8 +15,10 @@ import {
   Cell,
 } from 'recharts'
 
-export default function EnsembleTab({ data, ticker }) {
+export default function EnsembleTab({ data, ticker, tr }) {
   const { meta_learner, base_models, current_agreement, ensemble_vs_base } = data
+  // Use translation if provided, otherwise use default English
+  const t = tr || ((key) => key.split('.').pop())
 
   // Format model names
   const formatModelName = (name) => {

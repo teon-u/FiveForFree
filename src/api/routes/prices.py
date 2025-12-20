@@ -67,8 +67,8 @@ async def get_price_history(
         ticker = ticker.upper()
         logger.info(f"Fetching price history for {ticker} (last {minutes} minutes)")
 
-        # Calculate lookback time
-        now = datetime.utcnow()
+        # Calculate lookback time (use local time to match stored data)
+        now = datetime.now()
         lookback_time = now - timedelta(minutes=minutes)
 
         # Query minute bars
@@ -80,6 +80,18 @@ async def get_price_history(
         )
 
         bars = list(db.execute(stmt).scalars().all())
+
+        # If no data in requested window, fetch most recent available bars
+        if not bars:
+            logger.info(f"No data in {minutes}min window, fetching most recent bars")
+            stmt_recent = (
+                select(MinuteBar)
+                .where(MinuteBar.symbol == ticker)
+                .order_by(desc(MinuteBar.timestamp))
+                .limit(minutes)  # Return same number of bars as requested
+            )
+            bars = list(db.execute(stmt_recent).scalars().all())
+            bars.reverse()  # Oldest first for chart display
 
         if not bars:
             logger.warning(f"No price data found for {ticker}")

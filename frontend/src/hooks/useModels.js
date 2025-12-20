@@ -45,17 +45,21 @@ export function useModels(ticker) {
 function transformModelData(data) {
   const models = []
 
-  // Process each model type
+  // Process each model type - use up_models and down_models arrays from API
   const modelTypes = ['xgboost', 'lightgbm', 'lstm', 'transformer', 'ensemble']
 
   modelTypes.forEach(type => {
-    if (data.models && data.models[type]) {
-      const model = data.models[type]
+    // Find model in up_models array
+    const upModel = data.up_models?.find(m => m.model_type === type)
+    // Find model in down_models array
+    const downModel = data.down_models?.find(m => m.model_type === type)
+
+    if (upModel || downModel) {
       models.push({
         type,
-        up_hit_rate: (model.up_hit_rate || 0) * 100,
-        down_hit_rate: (model.down_hit_rate || 0) * 100,
-        is_trained: model.is_trained !== false,
+        up_hit_rate: upModel?.hit_rate_50h || 0,
+        down_hit_rate: downModel?.hit_rate_50h || 0,
+        is_trained: (upModel?.is_trained !== false) || (downModel?.is_trained !== false),
       })
     } else {
       // Add placeholder if model doesn't exist

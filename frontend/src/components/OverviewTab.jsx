@@ -1,5 +1,7 @@
-export default function OverviewTab({ data, ticker }) {
+export default function OverviewTab({ data, ticker, tr }) {
   const { prediction, ranking, quick_stats, risk_indicators } = data
+  // Use translation if provided, otherwise use default English
+  const t = tr || ((key) => key.split('.').pop())
 
   // Risk level styling
   const getRiskStyle = (level) => {
@@ -74,7 +76,7 @@ export default function OverviewTab({ data, ticker }) {
       <section>
         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
           <span className="mr-2">🎯</span>
-          Current Prediction
+          {t('overview.currentPrediction')}
         </h3>
         <div className="bg-surface-light rounded-lg p-6 border border-surface-lighter">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -113,7 +115,7 @@ export default function OverviewTab({ data, ticker }) {
       <section>
         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
           <span className="mr-2">🏆</span>
-          Model Ranking (Precision + Signal Rate)
+          {t('overview.modelRanking')}
         </h3>
         <div className="bg-surface-light rounded-lg p-6 border border-surface-lighter">
           {/* Header */}
@@ -195,7 +197,7 @@ export default function OverviewTab({ data, ticker }) {
       <section>
         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
           <span className="mr-2">⚡</span>
-          Quick Stats
+          {t('overview.quickStats')}
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-surface-light rounded-lg p-4 border border-surface-lighter">
@@ -207,13 +209,13 @@ export default function OverviewTab({ data, ticker }) {
           <div className="bg-surface-light rounded-lg p-4 border border-surface-lighter">
             <p className="text-sm text-gray-400 mb-1">Win Rate</p>
             <p className="text-2xl font-bold text-green-400">
-              {(quick_stats.win_rate * 100).toFixed(1)}%
+              {quick_stats.win_rate != null ? `${(quick_stats.win_rate * 100).toFixed(1)}%` : 'N/A'}
             </p>
           </div>
           <div className="bg-surface-light rounded-lg p-4 border border-surface-lighter">
             <p className="text-sm text-gray-400 mb-1">Avg Return</p>
             <p className="text-2xl font-bold text-blue-400">
-              +{(quick_stats.avg_return * 100).toFixed(1)}%
+              {quick_stats.avg_return >= 0 ? '+' : ''}{quick_stats.avg_return.toFixed(1)}%
             </p>
           </div>
           <div className="bg-surface-light rounded-lg p-4 border border-surface-lighter">
@@ -229,7 +231,7 @@ export default function OverviewTab({ data, ticker }) {
       <section>
         <h3 className="text-lg font-bold text-white mb-4 flex items-center">
           <span className="mr-2">⚠️</span>
-          Risk Indicators
+          {t('overview.riskIndicators')}
         </h3>
         <div className="bg-surface-light rounded-lg p-6 border border-surface-lighter">
           <div className="space-y-3">
@@ -278,7 +280,7 @@ export default function OverviewTab({ data, ticker }) {
           prediction.risk_level === 'moderate' ? 'bg-yellow-500/10 border-yellow-500/30' :
           'bg-red-500/10 border-red-500/30'
         }`}>
-          <h4 className="text-lg font-bold text-white mb-2">💡 Investment Signal</h4>
+          <h4 className="text-lg font-bold text-white mb-2">💡 {t('overview.investmentSignal')}</h4>
           <p className="text-gray-300">
             {prediction.risk_level === 'low' && (
               <>Strong signal detected. Model shows high confidence ({(prediction.probability * 100).toFixed(0)}%) with {risk_indicators.model_agreement > 0.7 ? 'strong' : 'moderate'} agreement among models.</>

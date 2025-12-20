@@ -11,7 +11,7 @@ import {
   Cell
 } from 'recharts'
 
-export default function FinancialTab({ data, ticker }) {
+export default function FinancialTab({ data, ticker, tr }) {
   const {
     equity_curve,
     risk_metrics,
@@ -19,6 +19,8 @@ export default function FinancialTab({ data, ticker }) {
     trade_distribution,
     recent_trades
   } = data
+  // Use translation if provided, otherwise use default English
+  const t = tr || ((key) => key.split('.').pop())
 
   // Format equity curve data for chart
   const equityData = equity_curve.map(point => ({
@@ -60,14 +62,14 @@ export default function FinancialTab({ data, ticker }) {
       <div className="bg-surface-light rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-white">Equity Curve</h3>
-            <p className="text-sm text-gray-400">Simulated backtest performance</p>
+            <h3 className="text-lg font-semibold text-white">{t('financial.equityCurve')}</h3>
+            <p className="text-sm text-gray-400">{t('financial.simulatedBacktest')}</p>
           </div>
           <div className="text-right">
             <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {totalPnL >= 0 ? '+' : ''}{totalPnLPct.toFixed(2)}%
             </div>
-            <div className="text-sm text-gray-400">Total Return</div>
+            <div className="text-sm text-gray-400">{t('financial.totalReturn')}</div>
           </div>
         </div>
 
@@ -130,7 +132,7 @@ export default function FinancialTab({ data, ticker }) {
       <div className="grid grid-cols-2 gap-6">
         {/* Risk Metrics */}
         <div className="bg-surface-light rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Risk Metrics</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t('financial.riskMetrics')}</h3>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -186,7 +188,7 @@ export default function FinancialTab({ data, ticker }) {
 
         {/* Trade Metrics */}
         <div className="bg-surface-light rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Trade Statistics</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t('financial.tradeStats')}</h3>
 
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
@@ -257,9 +259,9 @@ export default function FinancialTab({ data, ticker }) {
       {/* Trade Distribution */}
       {distributionData.length > 0 && (
         <div className="bg-surface-light rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Trade Distribution</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t('financial.tradeDistribution')}</h3>
           <p className="text-sm text-gray-400 mb-4">
-            Distribution of returns across all trades
+            {t('financial.distributionDesc')}
           </p>
 
           <ResponsiveContainer width="100%" height={250}>
@@ -307,9 +309,9 @@ export default function FinancialTab({ data, ticker }) {
       {/* Recent Trades */}
       {recent_trades.length > 0 && (
         <div className="bg-surface-light rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Recent Trades</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t('financial.recentTrades')}</h3>
           <p className="text-sm text-gray-400 mb-4">
-            Last {recent_trades.length} trades (most recent first)
+            {t('financial.lastNTrades').replace('{n}', recent_trades.length)}
           </p>
 
           <div className="overflow-x-auto">
@@ -363,11 +365,9 @@ export default function FinancialTab({ data, ticker }) {
         <div className="flex items-start gap-3">
           <div className="text-blue-400 text-xl">ℹ️</div>
           <div>
-            <div className="text-sm font-medium text-blue-400 mb-1">Simulated Backtest</div>
+            <div className="text-sm font-medium text-blue-400 mb-1">{t('financial.simulatedNote')}</div>
             <div className="text-xs text-gray-400">
-              This is a simplified backtest simulation. Correct predictions are assumed to earn +5%
-              (target return) while incorrect predictions lose -2%. Actual trading results may vary
-              based on market conditions, entry/exit timing, and slippage.
+              {t('financial.simulatedDesc')}
             </div>
           </div>
         </div>

@@ -534,9 +534,10 @@ async def get_model_overview(
         except Exception:
             trend = "unknown"
 
-        # Get actual backtest metrics for avg_return and sharpe
+        # Get actual backtest metrics for avg_return, sharpe, and win_rate
         avg_return = 0.0
         sharpe_ratio = 0.0
+        backtest_win_rate = None  # Will be used if available
         try:
             if best_up_model and best_up_model.is_trained:
                 backtest_results = best_up_model.get_backtest_results(hours=settings.BACKTEST_HOURS)
@@ -544,6 +545,10 @@ async def get_model_overview(
                     metrics = backtest_results['metrics']
                     avg_return = metrics.get('avg_return', 0.0)
                     sharpe_ratio = metrics.get('sharpe_ratio', 0.0)
+                    # Use backtest win_rate only if there are actual trades
+                    total_trades = metrics.get('total_trades', 0)
+                    if total_trades > 0:
+                        backtest_win_rate = metrics.get('win_rate', 0.0)
         except Exception as e:
             logger.warning(f"Failed to get backtest metrics for {ticker}: {e}")
 
@@ -559,7 +564,8 @@ async def get_model_overview(
             ranking=ranking[:5],  # Top 5
             quick_stats={
                 "accuracy": round(accuracy, 3),
-                "win_rate": round(up_stats.get('recall', 0.0), 3),
+                # Use backtest win_rate if available (trades exist), otherwise None
+                "win_rate": round(backtest_win_rate, 3) if backtest_win_rate is not None else None,
                 "avg_return": round(avg_return, 4),
                 "sharpe": round(sharpe_ratio, 2)
             },
@@ -756,20 +762,34 @@ async def get_ensemble_analysis(
                 })
 
         # Calculate current agreement using actual prediction data
-        ensemble_accuracy = ensemble_model.get_recent_accuracy(hours=50)
+        # Use get_prediction_stats() for consistency with base models
+        ensemble_stats = ensemble_model.get_prediction_stats(hours=50) if ensemble_model.is_trained else {}
+        ensemble_accuracy = ensemble_stats.get('accuracy', 0.0)
 
         # Determine ensemble direction based on up vs down model performance
+        # Ensemble is the meta learner, separate from base models
         try:
             _, up_ensemble = model_manager.get_or_create_model(ticker, "ensemble", "up")
             _, down_ensemble = model_manager.get_or_create_model(ticker, "ensemble", "down")
-            up_acc = up_ensemble.get_recent_accuracy(hours=50) if up_ensemble.is_trained else 0.0
-            down_acc = down_ensemble.get_recent_accuracy(hours=50) if down_ensemble.is_trained else 0.0
+            up_stats = up_ensemble.get_prediction_stats(hours=50) if up_ensemble.is_trained else {}
+            down_stats = down_ensemble.get_prediction_stats(hours=50) if down_ensemble.is_trained else {}
+            up_acc = up_stats.get('accuracy', 0.0)
+            down_acc = down_stats.get('accuracy', 0.0)
             ensemble_direction = "up" if up_acc >= down_acc else "down"
+            # Use accuracy as probability indicator (consistent with base models)
             ensemble_prob = max(up_acc, down_acc)
+
+            # If ensemble has no history, fall back to average of base models
+            if ensemble_prob == 0 and any(m['is_trained'] for m in base_models):
+                trained_accuracies = [m['accuracy'] for m in base_models if m['is_trained']]
+                ensemble_prob = sum(trained_accuracies) / len(trained_accuracies) if trained_accuracies else 0.0
+                ensemble_accuracy = ensemble_prob  # Also update ensemble accuracy
         except Exception:
             ensemble_direction = "up"
             ensemble_prob = ensemble_accuracy
 
+        # Agreement Rate calculation: Only use base models (4 models), NOT ensemble
+        # Ensemble is a meta learner that uses base model predictions
         base_predictions = []
         for model_info in base_models:
             if model_info['is_trained']:
@@ -781,7 +801,7 @@ async def get_ensemble_analysis(
                     "probability": model_info['accuracy'],
                 })
 
-        # Calculate agreement rate based on direction consensus
+        # Calculate agreement rate based on direction consensus among BASE models only
         if len(base_predictions) > 1:
             up_votes = sum(1 for p in base_predictions if p['direction'] == 'up')
             down_votes = len(base_predictions) - up_votes
@@ -796,8 +816,9 @@ async def get_ensemble_analysis(
             agreement_rate = 1.0 if len(base_predictions) == 1 else 0.0
             variance = 0.0
 
+        # Separate meta learner prediction from base model agreement
         current_agreement = {
-            "ensemble_prediction": {
+            "meta_learner_prediction": {
                 "direction": ensemble_direction,
                 "probability": ensemble_prob
             },
@@ -806,20 +827,14 @@ async def get_ensemble_analysis(
             "variance": round(variance if len(base_predictions) > 1 else 0.0, 4)
         }
 
-        # Get actual ensemble metrics (precision, recall, f1)
-        ensemble_precision = 0.0
-        ensemble_recall = 0.0
-        ensemble_f1 = 0.0
-        try:
-            if ensemble_model.is_trained:
-                ensemble_stats = ensemble_model.get_prediction_stats(hours=50)
-                ensemble_precision = ensemble_stats.get('precision', 0.0)
-                ensemble_recall = ensemble_stats.get('recall', 0.0)
-                # Calculate F1 score
-                if ensemble_precision + ensemble_recall > 0:
-                    ensemble_f1 = 2 * ensemble_precision * ensemble_recall / (ensemble_precision + ensemble_recall)
-        except Exception as e:
-            logger.warning(f"Failed to get ensemble metrics: {e}")
+        # Get ensemble metrics from already fetched stats
+        ensemble_precision = ensemble_stats.get('precision', 0.0)
+        ensemble_recall = ensemble_stats.get('recall', 0.0)
+        # Calculate F1 score
+        if ensemble_precision + ensemble_recall > 0:
+            ensemble_f1 = 2 * ensemble_precision * ensemble_recall / (ensemble_precision + ensemble_recall)
+        else:
+            ensemble_f1 = 0.0
 
         # Compare ensemble vs individual base models
         ensemble_vs_base = {

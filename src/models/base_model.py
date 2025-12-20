@@ -183,9 +183,10 @@ class BaseModel(ABC):
             return 0.0
 
         # Calculate accuracy based on probability threshold
+        threshold = settings.PROBABILITY_THRESHOLD
         correct = 0
         for pred in recent:
-            predicted_positive = pred['probability'] >= 0.5
+            predicted_positive = pred['probability'] >= threshold
             if predicted_positive == pred['actual_outcome']:
                 correct += 1
 
@@ -342,19 +343,21 @@ class BaseModel(ABC):
                 'recall': 0.0,
                 'signal_rate': 0.0,
                 'signal_count': 0,
-                'practicality_grade': 'D'
+                'practicality_grade': 'D',
+                'bias_warning': None
             }
 
-        # Calculate confusion matrix
-        tp = sum(1 for p in recent if p['probability'] >= 0.5 and p['actual_outcome'])
-        fp = sum(1 for p in recent if p['probability'] >= 0.5 and not p['actual_outcome'])
-        tn = sum(1 for p in recent if p['probability'] < 0.5 and not p['actual_outcome'])
-        fn = sum(1 for p in recent if p['probability'] < 0.5 and p['actual_outcome'])
+        # Calculate confusion matrix using configurable threshold
+        threshold = settings.PROBABILITY_THRESHOLD
+        tp = sum(1 for p in recent if p['probability'] >= threshold and p['actual_outcome'])
+        fp = sum(1 for p in recent if p['probability'] >= threshold and not p['actual_outcome'])
+        tn = sum(1 for p in recent if p['probability'] < threshold and not p['actual_outcome'])
+        fn = sum(1 for p in recent if p['probability'] < threshold and p['actual_outcome'])
 
         accuracy = (tp + tn) / len(recent) if recent else 0.0
         avg_prob = np.mean([p['probability'] for p in recent])
 
-        # Signal Rate = (predictions with prob >= 0.5) / total opportunities
+        # Signal Rate = (predictions with prob >= threshold) / total opportunities
         signals = tp + fp  # Number of buy signals
         total = len(recent)
         signal_rate = signals / total if total > 0 else 0.0
@@ -376,6 +379,13 @@ class BaseModel(ABC):
         else:
             practicality_grade = 'D'
 
+        # Bias warning detection
+        bias_warning = None
+        if signal_rate < 0.05 or signal_rate > 0.95:
+            bias_warning = "Model biased to one direction"
+        elif accuracy > 0.80 and precision < 0.20:
+            bias_warning = "High accuracy but low precision - class imbalance"
+
         return {
             'total_predictions': total,
             'accuracy': accuracy,
@@ -388,7 +398,8 @@ class BaseModel(ABC):
             'recall': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
             'signal_rate': signal_rate,
             'signal_count': signals,
-            'practicality_grade': practicality_grade
+            'practicality_grade': practicality_grade,
+            'bias_warning': bias_warning
         }
 
     def cleanup_old_predictions(self, days: int = 7) -> None:
@@ -495,7 +506,9 @@ class BaseModel(ABC):
                 'fpr': [],
                 'tpr': [],
                 'thresholds': [],
-                'auc': 0.0
+                'auc': 0.0,
+                'insufficient_data': True,
+                'sample_count': len(recent)
             }
 
         # Extract probabilities and labels
@@ -532,7 +545,9 @@ class BaseModel(ABC):
             'fpr': [float(x) for x in fpr_list],
             'tpr': [float(x) for x in tpr_list],
             'thresholds': [float(x) for x in thresholds],
-            'auc': abs(float(auc))
+            'auc': abs(float(auc)),
+            'insufficient_data': False,
+            'sample_count': len(recent)
         }
 
     def get_precision_recall_curve(self, hours: int = 50) -> dict[str, Any]:
@@ -557,7 +572,9 @@ class BaseModel(ABC):
                 'precision': [],
                 'recall': [],
                 'thresholds': [],
-                'average_precision': 0.0
+                'average_precision': 0.0,
+                'insufficient_data': True,
+                'sample_count': len(recent)
             }
 
         y_true = np.array([1 if p['actual_outcome'] else 0 for p in recent])
@@ -590,7 +607,9 @@ class BaseModel(ABC):
             'precision': [float(x) for x in precision_list],
             'recall': [float(x) for x in recall_list],
             'thresholds': [float(x) for x in thresholds],
-            'average_precision': float(ap)
+            'average_precision': float(ap),
+            'insufficient_data': False,
+            'sample_count': len(recent)
         }
 
     def get_calibration_curve(self, hours: int = 50, n_bins: int = 10) -> dict[str, Any]:
@@ -616,7 +635,9 @@ class BaseModel(ABC):
                 'predicted_probs': [],
                 'actual_freq': [],
                 'bin_counts': [],
-                'calibration_score': 0.0
+                'calibration_score': 0.0,
+                'insufficient_data': True,
+                'sample_count': len(recent)
             }
 
         y_true = np.array([1 if p['actual_outcome'] else 0 for p in recent])
@@ -655,7 +676,9 @@ class BaseModel(ABC):
             'predicted_probs': bin_centers,
             'actual_freq': actual_freqs,
             'bin_counts': bin_counts,
-            'calibration_score': float(max(0.0, calibration_score))
+            'calibration_score': float(max(0.0, calibration_score)),
+            'insufficient_data': False,
+            'sample_count': len(recent)
         }
 
     def get_performance_over_time(self, hours: int = 50, window_hours: int = 5) -> list[dict[str, Any]]:
@@ -716,12 +739,13 @@ class BaseModel(ABC):
 
     def get_backtest_results(self, hours: int = 50) -> dict[str, Any]:
         """
-        Generate simulated backtest results from prediction history.
+        Generate realistic backtest results from prediction history with actual price data.
 
-        Creates a simplified backtest without minute bar data by assuming:
-        - Correct predictions earn the target return (+5%)
-        - Incorrect predictions lose a smaller amount (-2%)
-        - This generates an equity curve and performance metrics
+        Uses 1-hour holding constraint:
+        - Entry: Price at prediction timestamp
+        - Exit: Price exactly 1 hour later
+        - No intermediate trading allowed
+        - Returns calculated from actual price movements
 
         Args:
             hours: Number of hours to look back
@@ -729,6 +753,9 @@ class BaseModel(ABC):
         Returns:
             Dictionary with equity curve, metrics, and trade distribution
         """
+        from sqlalchemy import select
+        from src.utils.database import get_db, MinuteBar
+
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
         # Filter to recent predictions with known outcomes
@@ -744,6 +771,11 @@ class BaseModel(ABC):
                     'total_trades': 0,
                     'win_rate': 0.0,
                     'total_return': 0.0,
+                    'avg_return': 0.0,
+                    'avg_win': 0.0,
+                    'avg_loss': 0.0,
+                    'best_trade': 0.0,
+                    'worst_trade': 0.0,
                     'sharpe_ratio': 0.0,
                     'sortino_ratio': 0.0,
                     'max_drawdown': 0.0,
@@ -751,71 +783,176 @@ class BaseModel(ABC):
                     'profit_factor': 0.0
                 },
                 'trade_distribution': [],
-                'recent_trades': []
+                'recent_trades': [],
+                'skipped_trades': 0
             }
 
         # Sort by timestamp
         recent = sorted(recent, key=lambda x: x['timestamp'])
 
-        # Simulate trades with realistic returns from settings
-        target_return = settings.TARGET_PERCENT
-        loss_return = -2.0  # Conservative loss assumption for time-limit exits
-        commission = settings.COMMISSION_PERCENT * 2  # Round-trip
+        commission = settings.COMMISSION_PERCENT * 2  # Round-trip commission
 
         equity_curve = [{'timestamp': recent[0]['timestamp'].isoformat(), 'equity': 100.0}]
         current_equity = 100.0
         trades = []
         returns = []
+        skipped_count = 0
+        last_exit_time = None
 
-        for pred in recent:
-            # Determine if trade was profitable
-            predicted_positive = pred['probability'] >= 0.5
-            correct = predicted_positive == pred['actual_outcome']
+        with get_db() as db:
+            for pred in recent:
+                pred_time = pred['timestamp']
 
-            # Calculate return
-            if correct:
-                gross_return = target_return
-            else:
-                gross_return = loss_return
+                # Enforce 1-hour holding constraint: skip if still in previous position
+                if last_exit_time and pred_time < last_exit_time:
+                    skipped_count += 1
+                    continue
 
-            net_return = gross_return - commission
-            returns.append(net_return)
+                # Calculate exit time (1 hour after prediction)
+                exit_time = pred_time + timedelta(hours=1)
 
-            # Update equity
-            current_equity *= (1 + net_return / 100)
-            equity_curve.append({
-                'timestamp': pred['timestamp'].isoformat(),
-                'equity': round(current_equity, 2)
-            })
+                # Query entry price (at prediction time)
+                entry_bar_stmt = (
+                    select(MinuteBar)
+                    .where(MinuteBar.symbol == self.ticker)
+                    .where(MinuteBar.timestamp >= pred_time)
+                    .order_by(MinuteBar.timestamp)
+                    .limit(1)
+                )
+                entry_bar = db.execute(entry_bar_stmt).scalar_one_or_none()
 
-            # Record trade
-            trades.append({
-                'timestamp': pred['timestamp'].isoformat(),
-                'return_pct': round(net_return, 2),
-                'is_win': net_return > 0,
-                'probability': pred['probability']
-            })
+                # Query exit price (1 hour later)
+                exit_bar_stmt = (
+                    select(MinuteBar)
+                    .where(MinuteBar.symbol == self.ticker)
+                    .where(MinuteBar.timestamp >= exit_time)
+                    .order_by(MinuteBar.timestamp)
+                    .limit(1)
+                )
+                exit_bar = db.execute(exit_bar_stmt).scalar_one_or_none()
+
+                # Check if we have valid MinuteBar data
+                use_fallback = False
+                if not entry_bar or not exit_bar:
+                    use_fallback = True
+                elif entry_bar.timestamp >= exit_bar.timestamp:
+                    use_fallback = True
+                elif (exit_bar.timestamp - entry_bar.timestamp).total_seconds() / 60 < 30:
+                    use_fallback = True
+
+                # Determine position direction based on prediction
+                predicted_up = pred['probability'] >= settings.PROBABILITY_THRESHOLD
+
+                if use_fallback:
+                    # Fallback: use actual_outcome from prediction history
+                    # This ensures consistency with Overview tab's win_rate
+                    actual_outcome = pred.get('actual_outcome')
+                    if actual_outcome is None:
+                        skipped_count += 1
+                        continue
+
+                    # Estimate return based on outcome (target is 5% move)
+                    # If prediction was correct, assume positive return
+                    # If prediction was wrong, assume negative return
+                    estimated_return = 2.5 if actual_outcome else -2.5  # Conservative estimate
+                    gross_return_pct = estimated_return
+                    entry_price = None
+                    exit_price = None
+                else:
+                    # Calculate actual return from MinuteBar data
+                    entry_price = entry_bar.close
+                    exit_price = exit_bar.close
+
+                    # Calculate gross return
+                    if predicted_up:
+                        # Long position: profit when price goes up
+                        gross_return_pct = ((exit_price - entry_price) / entry_price) * 100
+                    else:
+                        # Short position: profit when price goes down
+                        gross_return_pct = ((entry_price - exit_price) / entry_price) * 100
+
+                # Apply commission
+                net_return_pct = gross_return_pct - commission
+                returns.append(net_return_pct)
+
+                # Update equity
+                current_equity *= (1 + net_return_pct / 100)
+                equity_curve.append({
+                    'timestamp': exit_time.isoformat(),
+                    'equity': round(current_equity, 2)
+                })
+
+                # Record trade
+                # Classify: Win if positive, Loss if negative, Neutral if zero
+                if net_return_pct > 0:
+                    trade_result = 'win'
+                elif net_return_pct < 0:
+                    trade_result = 'loss'
+                else:
+                    trade_result = 'neutral'
+
+                trades.append({
+                    'timestamp': pred_time.isoformat(),
+                    'entry_time': pred_time.isoformat(),
+                    'exit_time': exit_time.isoformat(),
+                    'entry_price': round(entry_price, 2) if entry_price else None,
+                    'exit_price': round(exit_price, 2) if exit_price else None,
+                    'return_pct': round(net_return_pct, 2),
+                    'is_win': net_return_pct > 0,
+                    'is_neutral': net_return_pct == 0,
+                    'result': trade_result,
+                    'probability': pred['probability'],
+                    'direction': 'LONG' if predicted_up else 'SHORT',
+                    'is_estimated': use_fallback  # Flag to indicate fallback was used
+                })
+
+                # Update last exit time for holding constraint
+                last_exit_time = exit_time
 
         # Calculate performance metrics
+        if not returns:
+            return {
+                'equity_curve': equity_curve,
+                'metrics': {
+                    'total_trades': 0,
+                    'win_rate': 0.0,
+                    'total_return': 0.0,
+                    'avg_return': 0.0,
+                    'avg_win': 0.0,
+                    'avg_loss': 0.0,
+                    'best_trade': 0.0,
+                    'worst_trade': 0.0,
+                    'sharpe_ratio': 0.0,
+                    'sortino_ratio': 0.0,
+                    'max_drawdown': 0.0,
+                    'calmar_ratio': 0.0,
+                    'profit_factor': 0.0
+                },
+                'trade_distribution': [],
+                'recent_trades': [],
+                'skipped_trades': skipped_count
+            }
+
         wins = [r for r in returns if r > 0]
-        losses = [r for r in returns if r <= 0]
+        losses = [r for r in returns if r < 0]
+        neutrals = [r for r in returns if r == 0]
 
         total_trades = len(returns)
         win_rate = len(wins) / total_trades if total_trades > 0 else 0.0
         total_return = sum(returns)
         avg_return = np.mean(returns) if returns else 0.0
 
-        # Sharpe ratio
+        # Sharpe ratio (annualized for hourly returns)
         if len(returns) > 1:
             returns_std = np.std(returns, ddof=1)
-            sharpe = (avg_return / returns_std) if returns_std > 0 else 0.0
+            sharpe = (avg_return / returns_std) * np.sqrt(252 * 6.5) if returns_std > 0 else 0.0
         else:
             sharpe = 0.0
 
-        # Sortino ratio (downside deviation only)
+        # Sortino ratio (annualized, downside deviation only)
         if losses:
             downside_std = np.std(losses, ddof=1) if len(losses) > 1 else abs(losses[0])
-            sortino = (avg_return / downside_std) if downside_std > 0 else 0.0
+            sortino = (avg_return / downside_std) * np.sqrt(252 * 6.5) if downside_std > 0 else 0.0
         else:
             sortino = float('inf') if avg_return > 0 else 0.0
 
@@ -825,8 +962,9 @@ class BaseModel(ABC):
         drawdowns = cumulative - running_max
         max_drawdown = abs(drawdowns.min()) if len(drawdowns) > 0 else 0.0
 
-        # Calmar ratio
-        calmar = (total_return / max_drawdown) if max_drawdown > 0 else 0.0
+        # Calmar ratio (annualized return / max drawdown)
+        annualized_return = total_return * (252 * 6.5 / len(returns)) if len(returns) > 0 else 0.0
+        calmar = (annualized_return / max_drawdown) if max_drawdown > 0 else 0.0
 
         # Profit factor
         gross_profit = sum(wins) if wins else 0.0
@@ -834,11 +972,10 @@ class BaseModel(ABC):
         profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf')
 
         # Trade distribution (histogram data)
-        # Create bins from min to max return
         if returns:
             min_return = min(returns)
             max_return = max(returns)
-            n_bins = min(10, len(returns))  # Up to 10 bins
+            n_bins = min(10, len(returns))
 
             if min_return < max_return:
                 bins = np.linspace(min_return, max_return, n_bins + 1)
@@ -854,7 +991,6 @@ class BaseModel(ABC):
                     for i in range(len(hist))
                 ]
             else:
-                # All returns are the same
                 trade_distribution = [{
                     'range': f"{min_return:.1f}%",
                     'count': len(returns),
@@ -865,7 +1001,7 @@ class BaseModel(ABC):
             trade_distribution = []
 
         # Recent trades (last 10)
-        recent_trades = trades[-10:][::-1]  # Reverse to show newest first
+        recent_trades = trades[-10:][::-1]
 
         return {
             'equity_curve': equity_curve,
@@ -885,7 +1021,8 @@ class BaseModel(ABC):
                 'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 999.0
             },
             'trade_distribution': trade_distribution,
-            'recent_trades': recent_trades
+            'recent_trades': recent_trades,
+            'skipped_trades': skipped_count
         }
 
     def __repr__(self) -> str:

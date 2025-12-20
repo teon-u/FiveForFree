@@ -16,6 +16,7 @@ Hybrid-Ensemble Approach:
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
+import math
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -51,14 +52,20 @@ class HybridPredictionDetail:
     ensemble_alpha: float
 
     def to_dict(self) -> Dict[str, float]:
+        def sanitize_value(val):
+            """Replace NaN/Inf with None for JSON compatibility."""
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return None
+            return val
+
         return {
-            'direct_up_prob': self.direct_up_prob,
-            'direct_down_prob': self.direct_down_prob,
-            'volatility_prob': self.volatility_prob,
-            'direction_up_prob': self.direction_up_prob,
-            'hybrid_up_prob': self.hybrid_up_prob,
-            'hybrid_down_prob': self.hybrid_down_prob,
-            'ensemble_alpha': self.ensemble_alpha
+            'direct_up_prob': sanitize_value(self.direct_up_prob),
+            'direct_down_prob': sanitize_value(self.direct_down_prob),
+            'volatility_prob': sanitize_value(self.volatility_prob),
+            'direction_up_prob': sanitize_value(self.direction_up_prob),
+            'hybrid_up_prob': sanitize_value(self.hybrid_up_prob),
+            'hybrid_down_prob': sanitize_value(self.hybrid_down_prob),
+            'ensemble_alpha': sanitize_value(self.ensemble_alpha)
         }
 
 
@@ -98,16 +105,22 @@ class PredictionResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
+        def sanitize_value(val):
+            """Replace NaN/Inf with None for JSON compatibility."""
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return None
+            return val
+
         return {
             'ticker': self.ticker,
             'timestamp': self.timestamp.isoformat(),
-            'current_price': self.current_price,
-            'up_probability': self.up_probability,
-            'down_probability': self.down_probability,
+            'current_price': sanitize_value(self.current_price),
+            'up_probability': sanitize_value(self.up_probability),
+            'down_probability': sanitize_value(self.down_probability),
             'best_up_model': self.best_up_model,
             'best_down_model': self.best_down_model,
-            'up_model_accuracy': self.up_model_accuracy,
-            'down_model_accuracy': self.down_model_accuracy,
+            'up_model_accuracy': sanitize_value(self.up_model_accuracy),
+            'down_model_accuracy': sanitize_value(self.down_model_accuracy),
             'hybrid_detail': self.hybrid_detail.to_dict() if self.hybrid_detail else None,
             'all_model_predictions': self.all_model_predictions,
             'market_context': self.market_context
@@ -241,6 +254,11 @@ class RealtimePredictor:
 
         current_price = minute_bars.iloc[-1]['close']
 
+        # Validate price is not NaN or Inf
+        if current_price is None or pd.isna(current_price) or math.isinf(float(current_price)):
+            logger.warning(f"Invalid current_price for {ticker}: {current_price}")
+            raise ValueError(f"Invalid price data (NaN/Inf) for {ticker}")
+
         # Step 2: Collect order book
         order_book = self._collect_order_book(ticker)
 
@@ -325,15 +343,22 @@ class RealtimePredictor:
                         f"Final(UP={final_up_prob:.3f}, DOWN={final_down_prob:.3f})"
                     )
 
-            # Optionally get predictions from all models
+            # Create timestamp for prediction recording
+            prediction_timestamp = datetime.now()
+
+            # Optionally get predictions from all models (also records predictions)
             all_predictions = None
             if include_all_models:
-                all_predictions = self._get_all_model_predictions(ticker, X, X_seq)
+                all_predictions = self._get_all_model_predictions(
+                    ticker, X, X_seq,
+                    timestamp=prediction_timestamp,
+                    record_predictions=True
+                )
 
             # Create result
             result = PredictionResult(
                 ticker=ticker,
-                timestamp=datetime.now(),
+                timestamp=prediction_timestamp,
                 current_price=float(current_price),
                 up_probability=float(final_up_prob),
                 down_probability=float(final_down_prob),
@@ -347,9 +372,52 @@ class RealtimePredictor:
                 market_context=market_context if include_features else None
             )
 
-            # Log prediction to models for accuracy tracking
-            best_up_model.record_prediction(final_up_prob, result.timestamp, X)
-            best_down_model.record_prediction(final_down_prob, result.timestamp, X)
+            # Log prediction to best models for accuracy tracking
+            # (only if not already recorded by _get_all_model_predictions)
+            if not include_all_models:
+                # Record direct predictions to direct models (not ensemble)
+                best_up_model.record_prediction(direct_up_prob, result.timestamp, X)
+                best_down_model.record_prediction(direct_down_prob, result.timestamp, X)
+
+                # Record ensemble model predictions (if ensemble model exists)
+                try:
+                    # Record for "up" target ensemble
+                    ensemble_up_models = self.model_manager.get_all_models(ticker, "up")
+                    if "ensemble" in ensemble_up_models and ensemble_up_models["ensemble"].is_trained:
+                        ensemble_up_model = ensemble_up_models["ensemble"]
+                        ensemble_up_model.record_prediction(final_up_prob, result.timestamp, X)
+
+                    # Record for "down" target ensemble
+                    ensemble_down_models = self.model_manager.get_all_models(ticker, "down")
+                    if "ensemble" in ensemble_down_models and ensemble_down_models["ensemble"].is_trained:
+                        ensemble_down_model = ensemble_down_models["ensemble"]
+                        ensemble_down_model.record_prediction(final_down_prob, result.timestamp, X)
+                except Exception as e:
+                    logger.debug(f"Could not record ensemble predictions: {e}")
+
+                # If hybrid mode is enabled, also record hybrid component predictions
+                if use_hybrid and hybrid_detail is not None:
+                    try:
+                        # Record volatility and direction predictions from Structure B
+                        vol_type, vol_model = self.model_manager.get_best_model(ticker, "volatility")
+                        dir_type, dir_model = self.model_manager.get_best_model(ticker, "direction")
+
+                        vol_model.record_prediction(hybrid_detail.volatility_prob, result.timestamp, X)
+                        dir_model.record_prediction(hybrid_detail.direction_up_prob, result.timestamp, X)
+
+                        # Record ensemble for hybrid targets if they exist
+                        try:
+                            vol_ensemble = self.model_manager.get_all_models(ticker, "volatility")
+                            if "ensemble" in vol_ensemble and vol_ensemble["ensemble"].is_trained:
+                                vol_ensemble["ensemble"].record_prediction(hybrid_detail.volatility_prob, result.timestamp, X)
+
+                            dir_ensemble = self.model_manager.get_all_models(ticker, "direction")
+                            if "ensemble" in dir_ensemble and dir_ensemble["ensemble"].is_trained:
+                                dir_ensemble["ensemble"].record_prediction(hybrid_detail.direction_up_prob, result.timestamp, X)
+                        except Exception as e:
+                            logger.debug(f"Could not record hybrid ensemble predictions: {e}")
+                    except Exception as e:
+                        logger.debug(f"Could not record hybrid predictions: {e}")
 
             elapsed = (datetime.now() - start_time).total_seconds()
             logger.info(
@@ -630,7 +698,9 @@ class RealtimePredictor:
         self,
         ticker: str,
         X: np.ndarray,
-        X_seq: np.ndarray = None
+        X_seq: np.ndarray = None,
+        timestamp: datetime = None,
+        record_predictions: bool = True
     ) -> Dict[str, Dict[str, float]]:
         """
         Get predictions from all available models (Structure A + B).
@@ -639,6 +709,8 @@ class RealtimePredictor:
             ticker: Stock ticker symbol
             X: Feature vector for tree models (1, n_features)
             X_seq: Sequence data for LSTM/Transformer (60, n_features)
+            timestamp: Timestamp for recording predictions
+            record_predictions: Whether to record predictions for accuracy tracking
 
         Returns:
             Nested dictionary: {target: {model_type: probability}}
@@ -648,6 +720,10 @@ class RealtimePredictor:
         # If X_seq not provided, fall back to X
         if X_seq is None:
             X_seq = X
+
+        # Use current time if no timestamp provided
+        if timestamp is None:
+            timestamp = datetime.now()
 
         # Structure A targets
         for target in settings.PREDICTION_TARGETS:
@@ -671,6 +747,10 @@ class RealtimePredictor:
                                 'probability': float(prob),
                                 'accuracy': float(precision)  # Now reports precision
                             }
+
+                            # Record prediction for accuracy tracking
+                            if record_predictions:
+                                model.record_prediction(float(prob), timestamp, X_input)
                         except Exception as e:
                             logger.error(f"Failed to get prediction from {model_type}: {e}")
             except Exception as e:
@@ -690,15 +770,19 @@ class RealtimePredictor:
                                 # Use X_seq for sequence models, X for tree models
                                 X_input = X_seq if model_type in ('lstm', 'transformer') else X
                                 prob = model.predict_proba(X_input)
-                            # Handle both scalar (LSTM/Transformer) and array (tree models) returns
-                            if hasattr(prob, '__len__'):
-                                prob = prob[0]
+                                # Handle both scalar (LSTM/Transformer) and array (tree models) returns
+                                if hasattr(prob, '__len__'):
+                                    prob = prob[0]
                                 precision = model.get_precision_at_threshold(hours=settings.BACKTEST_HOURS, threshold=0.5)
 
                                 all_predictions[target][model_type] = {
                                     'probability': float(prob),
                                     'accuracy': float(precision)  # Now reports precision
                                 }
+
+                                # Record prediction for accuracy tracking
+                                if record_predictions:
+                                    model.record_prediction(float(prob), timestamp, X_input)
                             except Exception as e:
                                 logger.error(f"Failed to get hybrid prediction from {model_type}: {e}")
                 except Exception as e:
