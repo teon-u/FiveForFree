@@ -115,11 +115,12 @@ describe('TickerCard', () => {
     expect(screen.getByText(/55/)).toBeInTheDocument()
   })
 
-  it('applies correct style for high probability up direction', () => {
+  it('applies correct style for A-grade prediction', () => {
     const highProbPrediction = {
       ...defaultPrediction,
       probability: 85,
       direction: 'up',
+      practicality_grade: 'A',
     }
 
     const { container } = render(
@@ -131,14 +132,16 @@ describe('TickerCard', () => {
     )
 
     const card = container.querySelector('.ticker-card')
-    expect(card).toHaveClass('strong-up')
+    expect(card).toHaveClass('grade-border-a')
+    expect(card).toHaveClass('grade-a-animate')
   })
 
-  it('applies correct style for high probability down direction', () => {
+  it('applies correct style for B-grade prediction', () => {
     const downPrediction = {
       ...defaultPrediction,
       probability: 85,
       direction: 'down',
+      practicality_grade: 'B',
     }
 
     const { container } = render(
@@ -150,7 +153,7 @@ describe('TickerCard', () => {
     )
 
     const card = container.querySelector('.ticker-card')
-    expect(card).toHaveClass('strong-down')
+    expect(card).toHaveClass('grade-border-b')
   })
 
   it('uses real-time price from store when available', () => {
@@ -180,21 +183,22 @@ describe('TickerCard', () => {
     expect(screen.getByText('$195.50')).toBeInTheDocument()
   })
 
-  it('renders neutral style for moderate probability', () => {
-    const neutralPrediction = {
+  it('renders C-grade style for C-grade prediction', () => {
+    const cGradePrediction = {
       ...defaultPrediction,
       probability: 60,
+      practicality_grade: 'C',
     }
 
     const { container } = render(
       <TickerCard
-        prediction={neutralPrediction}
+        prediction={cGradePrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
       />
     )
 
     const card = container.querySelector('.ticker-card')
-    expect(card).toHaveClass('neutral')
+    expect(card).toHaveClass('grade-border-c')
   })
 })

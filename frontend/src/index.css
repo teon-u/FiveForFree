@@ -35,6 +35,32 @@
     @apply border border-neutral/30;
   }
 
+  /* Grade-based border styles */
+  .grade-border-a {
+    @apply border-2 border-green-500 shadow-lg shadow-green-500/30;
+  }
+
+  .grade-border-b {
+    @apply border-2 border-blue-500 shadow-md shadow-blue-500/20;
+  }
+
+  .grade-border-c {
+    @apply border border-yellow-500/70 shadow-sm shadow-yellow-500/15;
+  }
+
+  .grade-border-d {
+    @apply border border-gray-600;
+  }
+
+  .grade-border-na {
+    @apply border border-dashed border-gray-700;
+  }
+
+  /* Grade A highlight marker */
+  .grade-a-marker {
+    @apply absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/50;
+  }
+
   /* Probability badge */
   .prob-badge {
     @apply px-3 py-1 rounded-full text-sm font-bold;
@@ -182,4 +208,43 @@
 
 .animate-flash-red {
   animation: flash-red 1s ease-out;
+}
+
+/* Grade A pulse animation */
+@keyframes grade-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4), 0 10px 15px -3px rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0), 0 10px 15px -3px rgba(34, 197, 94, 0.3);
+  }
+}
+
+.grade-a-animate {
+  animation: grade-pulse 2s ease-in-out infinite;
+  will-change: box-shadow;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .grade-a-animate {
+    animation: none;
+  }
+}
+
+/* Enhanced hover effects for grade cards */
+.grade-border-a:hover {
+  @apply shadow-xl shadow-green-500/40 scale-[1.03];
+}
+
+.grade-border-b:hover {
+  @apply shadow-lg shadow-blue-500/30 scale-[1.02];
+}
+
+.grade-border-c:hover {
+  @apply shadow-md shadow-yellow-500/25 scale-[1.02];
+}
+
+.grade-border-d:hover {
+  @apply shadow-md shadow-gray-500/20 scale-[1.01];
 }
