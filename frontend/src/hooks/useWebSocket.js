@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePriceStore } from '../stores/priceStore'
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(null)
+  const [subscribedTickers, setSubscribedTickers] = useState([])
   const wsRef = useRef(null)
   const queryClient = useQueryClient()
   const reconnectTimeoutRef = useRef(null)
@@ -70,6 +71,21 @@ export function useWebSocket() {
                 // Just to keep connection alive
                 break
 
+              case 'subscribed':
+                // Subscription confirmed by server
+                console.log('Subscription confirmed:', data.tickers)
+                break
+
+              case 'unsubscribed':
+                // Unsubscription confirmed by server
+                console.log('Unsubscription confirmed:', data.tickers)
+                break
+
+              case 'error':
+                // Error message from server
+                console.error('WebSocket server error:', data.message)
+                break
+
               default:
                 console.log('Unknown message type:', data.type)
             }
@@ -111,8 +127,43 @@ export function useWebSocket() {
     }
   }, [queryClient, setConnected, updatePrices])
 
+  // Subscribe to specific tickers for price updates
+  const subscribeTickers = useCallback((tickers) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'subscribe',
+        tickers: tickers
+      }))
+      setSubscribedTickers(prev => [...new Set([...prev, ...tickers])])
+      console.log('Subscribed to tickers:', tickers)
+    }
+  }, [])
+
+  // Unsubscribe from specific tickers
+  const unsubscribeTickers = useCallback((tickers) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'unsubscribe',
+        tickers: tickers
+      }))
+      setSubscribedTickers(prev => prev.filter(t => !tickers.includes(t)))
+      console.log('Unsubscribed from tickers:', tickers)
+    }
+  }, [])
+
+  // Send a custom message to the WebSocket server
+  const sendMessage = useCallback((message) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message))
+    }
+  }, [])
+
   return {
     isConnected,
     lastUpdate,
+    subscribedTickers,
+    subscribeTickers,
+    unsubscribeTickers,
+    sendMessage,
   }
 }
