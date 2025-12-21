@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import clsx from 'clsx'
 import { usePriceStore } from '../stores/priceStore'
+import { useSparkline } from '../hooks/usePriceHistory'
+import Sparkline from './Sparkline'
 
 export default function TickerCard({ prediction, onClick, onDetailClick }) {
   const {
@@ -17,6 +19,9 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
   // Get real-time price from store
   const priceData = usePriceStore((state) => state.prices[ticker])
   const clearPriceChanged = usePriceStore((state) => state.clearPriceChanged)
+
+  // Get sparkline data
+  const { data: sparklineData } = useSparkline(ticker)
 
   // Use real-time change_percent if available, otherwise use prediction data
   const displayChangePercent = priceData?.change_percent ?? change_percent
@@ -42,7 +47,35 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
     return 'neutral'
   }
 
+  // Grade-based border styling (new visual enhancement)
+  const getGradeBorderClass = (grade) => {
+    switch (grade) {
+      case 'A':
+        return 'grade-border-a grade-a-animate'
+      case 'B':
+        return 'grade-border-b'
+      case 'C':
+        return 'grade-border-c'
+      case 'D':
+        return 'grade-border-d'
+      default:
+        return 'grade-border-na'
+    }
+  }
+
+  // Background gradient based on direction
+  const getDirectionBgClass = () => {
+    if (probability >= 70) {
+      return direction === 'up'
+        ? 'bg-gradient-to-br from-green-950/30 to-transparent'
+        : 'bg-gradient-to-br from-red-950/30 to-transparent'
+    }
+    return ''
+  }
+
   const cardStyle = getCardStyle()
+  const gradeBorderClass = getGradeBorderClass(practicality_grade)
+  const directionBgClass = getDirectionBgClass()
   const isSignificant = probability >= 70
 
   // Warning: High probability but low precision (unreliable prediction)
@@ -76,8 +109,21 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
 
   return (
     <div
-      className={clsx('ticker-card', cardStyle, 'relative')}
+      role="article"
+      aria-label={`${ticker} 티커, 등급 ${practicality_grade}, 예측 확률 ${probability.toFixed(0)}%`}
+      className={clsx(
+        'ticker-card relative rounded-xl p-4 transition-all duration-200',
+        gradeBorderClass,
+        directionBgClass
+      )}
     >
+      {/* A-Grade Highlight Marker */}
+      {practicality_grade === 'A' && (
+        <div className="grade-a-marker">
+          <span className="text-white text-xs font-bold">★</span>
+        </div>
+      )}
+
       {/* Ticker Symbol */}
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-lg font-bold">{ticker}</h3>
@@ -86,6 +132,15 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
             {direction === 'up' ? '🟢' : '🔴'}
           </div>
         )}
+      </div>
+
+      {/* Sparkline */}
+      <div className="mb-2">
+        <Sparkline
+          data={sparklineData?.data}
+          direction={sparklineData?.direction || direction}
+          height={32}
+        />
       </div>
 
       {/* Probability */}
@@ -125,6 +180,7 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
               {formatModelName(best_model)}
             </span>
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getGradeStyle(practicality_grade)}`}>
+              {practicality_grade === 'A' && <span className="mr-0.5">⭐</span>}
               {practicality_grade}
             </span>
           </div>

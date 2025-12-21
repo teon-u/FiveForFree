@@ -20,7 +20,8 @@
     "tickers": "tickers",
     "loading": "Loading predictions...",
     "error": "Error Loading Data",
-    "noData": "No predictions available"
+    "noData": "No predictions available",
+    "export": "Export"
   },
   "tickerCard": {
     "model": "Model",
@@ -145,5 +146,42 @@
     "modelWeights": "Model Weights",
     "correlationMatrix": "Correlation Matrix",
     "ensembleSettings": "Ensemble Settings"
+  },
+  "discovery": {
+    "title": "Ticker Discovery",
+    "newFound": "New gainers found!",
+    "andMore": "and {count} more",
+    "viewDetails": "View Details",
+    "refresh": "Refresh",
+    "totalTickers": "Total Tickers",
+    "trainedTickers": "Trained",
+    "coverage": "Coverage",
+    "newGainers": "New Gainers",
+    "noNewGainers": "No new gainers found",
+    "newVolumeTop": "New Volume Top",
+    "noNewVolume": "No new volume tickers found",
+    "trainingQueue": "Training Queue",
+    "training": "Training",
+    "pending": "Pending",
+    "minutes": "min",
+    "trainAll": "Train All Untrained Tickers"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "clearAll": "Clear all",
+    "empty": "No notifications",
+    "settings": "Notification Settings"
+  },
+  "watchlist": {
+    "title": "Watchlist",
+    "edit": "Edit",
+    "done": "Done",
+    "tickers": "tickers",
+    "alerts": "Alerts",
+    "active": "active",
+    "empty": "Watchlist is empty",
+    "emptyHint": "Add tickers to get started",
+    "searchPlaceholder": "Search tickers..."
   }
 }

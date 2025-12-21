@@ -234,18 +234,26 @@ class EnsembleModel(BaseModel):
             y_meta_train = np.asarray(y_valid)
 
             if HAS_XGBOOST:
-                # Use XGBoost as meta-learner
-                self._stacking_learner = xgb.XGBClassifier(
-                    n_estimators=50,
-                    max_depth=3,
-                    learning_rate=0.1,
-                    objective='binary:logistic',
-                    eval_metric='logloss',
-                    use_label_encoder=False,
-                    random_state=42
-                )
-                self._stacking_learner.fit(X_meta_train, y_meta_train)
-                logger.info("Trained XGBoost meta-learner")
+                # 레이블 검증: 모든 값이 동일하면 메타러너 학습 스킵
+                positive_ratio = float(np.mean(y_meta_train))
+                if positive_ratio == 0.0 or positive_ratio == 1.0:
+                    logger.warning(
+                        f"Skipping XGBoost meta-learner for {self.ticker} {self.target}: "
+                        f"all labels are {int(positive_ratio)}"
+                    )
+                else:
+                    # Use XGBoost as meta-learner with clipped base_score
+                    self._stacking_learner = xgb.XGBClassifier(
+                        n_estimators=50,
+                        max_depth=3,
+                        learning_rate=0.1,
+                        objective='binary:logistic',
+                        eval_metric='logloss',
+                        random_state=42,
+                        base_score=np.clip(positive_ratio, 0.01, 0.99)
+                    )
+                    self._stacking_learner.fit(X_meta_train, y_meta_train)
+                    logger.info("Trained XGBoost meta-learner")
             elif HAS_SKLEARN:
                 # Fallback to LogisticRegression
                 self._stacking_learner = LogisticRegression(
@@ -340,6 +348,8 @@ class EnsembleModel(BaseModel):
 
                 if base_model.is_trained:
                     preds = base_model.predict_proba(X)
+                    # Ensure predictions are always 1D arrays (not scalars)
+                    preds = np.atleast_1d(preds)
                     base_predictions[model_type] = preds
 
             except Exception as e:
@@ -423,6 +433,21 @@ class EnsembleModel(BaseModel):
         if total > 0:
             self._strategy_weights = {k: v/total for k, v in weights.items()}
             logger.info(f"Strategy weights updated: {self._strategy_weights}")
+
+    def __getstate__(self):
+        """Customize pickle serialization to exclude _model_manager."""
+        state = self.__dict__.copy()
+        # _model_manager contains ALL models for ALL tickers
+        # Storing it would cause massive pickle files (340MB each!)
+        # It will be restored via set_model_manager() after loading
+        state['_model_manager'] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore state from pickle."""
+        self.__dict__.update(state)
+        # _model_manager is None after unpickling
+        # ModelManager.load_all_models() will call set_model_manager()
 
     def save(self, path: Path):
         """Save model to disk."""

@@ -152,7 +152,7 @@ from src.processor import LabelGenerator
 
 # Initialize
 lg = LabelGenerator(
-    target_percent=5.0,              # 5% target
+    target_percent=1.0,              # 1% target (default)
     prediction_horizon_minutes=60,    # 60-minute horizon
     commission_pct=0.1                # 0.1% commission
 )
@@ -161,8 +161,8 @@ lg = LabelGenerator(
 df_labels = lg.generate_labels_vectorized(minute_bars)
 
 # Output columns:
-# - label_up: 1 if +5% reached within 60 min
-# - label_down: 1 if -5% reached within 60 min
+# - label_up: 1 if +1% reached within 60 min
+# - label_down: 1 if -1% reached within 60 min
 # - max_gain: Maximum gain percentage
 # - max_loss: Maximum loss percentage
 

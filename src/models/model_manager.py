@@ -89,12 +89,18 @@ class ModelManager:
                                 logger.debug(f"Migrated legacy 'model' to '_model' for {model_file.name}")
 
                         # For LSTM/Transformer models, call load() to restore PyTorch weights from .pt file
-                        if model_type in ('lstm', 'transformer'):
+                        # For XGBoost models, call load() to restore booster from .json file
+                        if model_type in ('lstm', 'transformer', 'xgboost'):
                             try:
                                 model.load(model_file)
-                                logger.debug(f"Loaded PyTorch weights for {model_file.name}")
+                                logger.debug(f"Loaded model weights for {model_file.name}")
                             except Exception as e:
-                                logger.warning(f"Could not load PyTorch weights for {model_file.name}: {e}")
+                                logger.warning(f"Could not load model weights for {model_file.name}: {e}")
+
+                        # For Ensemble models, set the model_manager reference
+                        # (it was excluded from pickle to avoid 340MB files)
+                        if model_type == 'ensemble':
+                            model.set_model_manager(self)
 
                         self._models[ticker][model_type][target] = model
                         loaded_count += 1

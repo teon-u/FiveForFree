@@ -1,7 +1,7 @@
 """
 Feature Engineering Module for NASDAQ Prediction System
 
-Generates 49 features across 7 categories:
+Generates features across multiple categories:
 - Price-based (15)
 - Volatility-based (10)
 - Volume-based (8)
@@ -9,6 +9,7 @@ Generates 49 features across 7 categories:
 - Momentum (8)
 - Market context (5)
 - Time-based (3)
+- Enhanced features (23): Sector, Market Regime, Calendar, Cross-Market
 """
 
 from datetime import datetime, time
@@ -20,6 +21,14 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 from loguru import logger
+
+# Import enhanced features module
+try:
+    from src.processor.enhanced_features import get_enhanced_feature_engineer
+    HAS_ENHANCED = True
+except ImportError:
+    HAS_ENHANCED = False
+    logger.warning("Enhanced features module not available")
 
 # Try to import talib, fallback to pandas implementation if not available
 try:
@@ -190,12 +199,46 @@ class FeatureEngineer:
     Includes caching for repeated computations on same data.
     """
 
+    # Features to exclude based on predictive power analysis (2024-12-22)
+    # Sign Flip features: Train/Val correlation reverses direction
+    # High Importance Low Correlation: Model overfitting to noise
+    EXCLUDED_FEATURES = {
+        # Sign Flip Features (16) - correlation direction reverses between train/val
+        'returns_1m',       # Train: -0.008, Val: +0.022
+        'returns_5m',       # Train: -0.003, Val: +0.034
+        'returns_30m',      # Train: -0.019, Val: +0.037
+        'returns_60m',      # Train: -0.028, Val: +0.021
+        'price_vs_ma_5',    # Train: -0.013, Val: +0.036
+        'price_vs_ma_15',   # Train: -0.006, Val: +0.035
+        'price_vs_ma_60',   # Train: -0.026, Val: +0.026
+        'price_vs_vwap',    # Train: +0.001, Val: -0.014
+        'rsi_14',           # Train: -0.001, Val: +0.012
+        'stoch_k',          # Train: +0.004, Val: -0.004
+        'stoch_d',          # Train: +0.005, Val: -0.009
+        'cci_14',           # Train: -0.005, Val: +0.014
+        'mfi_14',           # Train: -0.002, Val: +0.015
+        'bb_position',      # Train: -0.003, Val: +0.013
+        'obv_normalized',   # Train: -0.002, Val: +0.003
+        'is_option_expiry', # Train: -0.002, Val: +0.005
+
+        # High Importance but Low Correlation - overfitting to noise
+        'vpt_cumsum',       # Importance: 55.1, but unstable predictor
+
+        # Unstable Features - large train/val correlation difference
+        'ma_5',             # Corr diff: 0.14
+        'ma_15',            # Corr diff: 0.14
+        'ma_60',            # Corr diff: 0.14
+    }
+
     def __init__(
         self,
         market_open: time = time(9, 30),
         market_close: time = time(16, 0),
         cache_size: int = 100,
         cache_ttl_seconds: int = 60,
+        use_feature_filter: bool = True,
+        use_enhanced_features: bool = True,
+        ticker: str = None,
     ):
         """
         Initialize feature engineer.
@@ -205,11 +248,20 @@ class FeatureEngineer:
             market_close: Market closing time (default 4:00 PM)
             cache_size: Maximum number of cached feature computations
             cache_ttl_seconds: Time-to-live for cache entries in seconds
+            use_feature_filter: Whether to exclude problematic features (default True)
+            use_enhanced_features: Whether to include enhanced features (default True)
+            ticker: Stock ticker for sector-specific features
         """
         self.market_open = market_open
         self.market_close = market_close
         self.cache_size = cache_size
         self.cache_ttl_seconds = cache_ttl_seconds
+        self.use_feature_filter = use_feature_filter
+        self.use_enhanced_features = use_enhanced_features and HAS_ENHANCED
+        self.ticker = ticker
+
+        # Enhanced feature engineer (lazy loaded)
+        self._enhanced_engineer = None
 
         # Feature cache: {hash: (features_df, timestamp)}
         self._cache: Dict[str, Tuple[pd.DataFrame, float]] = {}
@@ -341,6 +393,10 @@ class FeatureEngineer:
         # 7. Time-based features (3)
         df = self._add_time_features(df)
 
+        # 8. Enhanced features (23) - Sector, Market Regime, Calendar, Cross-Market
+        if self.use_enhanced_features:
+            df = self._add_enhanced_features(df)
+
         # Fill any remaining NaN values
         df = self._handle_missing_values(df)
 
@@ -349,6 +405,57 @@ class FeatureEngineer:
             self._add_to_cache(cache_key, df)
 
         return df
+
+    def _add_enhanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add enhanced features: Sector, Market Regime, Calendar, Cross-Market.
+
+        Total: 23 features
+        - Sector (4): sector_return_5m, sector_return_15m, stock_vs_sector, sector_rank
+        - Market Regime (6): spy_return_5m, qqq_return_5m, market_regime, spy_qqq_divergence, vix_proxy, vix_change
+        - Calendar (9): is_fomc_day, is_fomc_week, is_month_end, is_month_start, is_quarter_end, is_friday, hour_of_day, is_power_hour, is_opening_hour
+        - Cross-Market (4): bond_return, gold_return, dollar_return, risk_on_signal
+        """
+        try:
+            if self._enhanced_engineer is None:
+                self._enhanced_engineer = get_enhanced_feature_engineer()
+
+            ticker = self.ticker or 'AAPL'  # Default to AAPL if not specified
+
+            df = self._enhanced_engineer.compute_all_enhanced_features(
+                df, ticker,
+                include_sector=True,
+                include_regime=True,
+                include_calendar=True,
+                include_cross_market=True
+            )
+        except Exception as e:
+            logger.warning(f"Failed to compute enhanced features: {e}")
+            # Add default values for all enhanced features
+            enhanced_features = self._get_enhanced_feature_names()
+            for feat in enhanced_features:
+                if feat not in df.columns:
+                    df[feat] = 0.0
+
+        return df
+
+    def _get_enhanced_feature_names(self) -> List[str]:
+        """Get list of enhanced feature names."""
+        return [
+            # Sector features (4)
+            'sector_return_5m', 'sector_return_15m', 'stock_vs_sector', 'sector_rank',
+
+            # Market regime features (6)
+            'spy_return_5m', 'qqq_return_5m', 'market_regime',
+            'spy_qqq_divergence', 'vix_proxy', 'vix_change',
+
+            # Calendar features (9)
+            'is_fomc_day', 'is_fomc_week', 'is_month_end', 'is_month_start',
+            'is_quarter_end', 'is_friday', 'hour_of_day', 'is_power_hour', 'is_opening_hour',
+
+            # Cross-market features (4)
+            'bond_return', 'gold_return', 'dollar_return', 'risk_on_signal',
+        ]
 
     def _add_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -784,14 +891,17 @@ class FeatureEngineer:
 
         return df
 
-    def get_feature_names(self) -> List[str]:
+    def get_feature_names(self, include_all: bool = False) -> List[str]:
         """
-        Get list of all 49 feature names.
+        Get list of feature names.
+
+        Args:
+            include_all: If True, return all features ignoring filter settings
 
         Returns:
             List of feature names in order
         """
-        features = [
+        base_features = [
             # Price-based (15)
             'returns_1m', 'returns_5m', 'returns_15m', 'returns_30m', 'returns_60m',
             'ma_5', 'ma_15', 'ma_60',
@@ -819,7 +929,19 @@ class FeatureEngineer:
             'minutes_since_open', 'day_of_week', 'is_option_expiry'
         ]
 
-        return features
+        # Add enhanced features if enabled
+        if self.use_enhanced_features:
+            enhanced_features = self._get_enhanced_feature_names()
+            all_features = base_features + enhanced_features
+        else:
+            all_features = base_features
+
+        # Apply feature filter if enabled
+        if self.use_feature_filter and not include_all:
+            features = [f for f in all_features if f not in self.EXCLUDED_FEATURES]
+            return features
+
+        return all_features
 
     def get_feature_importance_groups(self) -> Dict[str, List[str]]:
         """

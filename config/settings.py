@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Collection Settings
     TOP_N_VOLUME: int = 50  # Reduced for free tier API limits
     TOP_N_GAINERS: int = 50  # Reduced for free tier API limits
-    HISTORICAL_DAYS: int = 30
+    HISTORICAL_DAYS: int = 60  # Yahoo Finance 5분봉 최대 (실제 ~84일 제공)
     API_CALL_DELAY: float = 1.0  # 60 calls/minute = 1 call/second
 
     # Prediction Settings
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
 
     # GPU Settings
     USE_GPU: bool = True
+    USE_MIXED_PRECISION: bool = True  # FP16 AMP for RTX GPU optimization
+    LSTM_BATCH_SIZE: int = 128  # RTX 5080 can handle 128-256
+    TRANSFORMER_BATCH_SIZE: int = 128  # RTX 5080 can handle 128-256
+    DATALOADER_WORKERS: int = 0  # Windows 호환성 (Linux에서는 4 권장)
 
     # Data Directory
     DATA_DIR: str = "./data"

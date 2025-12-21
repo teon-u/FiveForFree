@@ -20,7 +20,8 @@
     "tickers": "종목",
     "loading": "예측 데이터 로딩 중...",
     "error": "데이터 로딩 오류",
-    "noData": "사용 가능한 예측 없음"
+    "noData": "사용 가능한 예측 없음",
+    "export": "내보내기"
   },
   "tickerCard": {
     "model": "모델",
@@ -145,5 +146,42 @@
     "modelWeights": "모델 가중치",
     "correlationMatrix": "상관관계 행렬",
     "ensembleSettings": "앙상블 설정"
+  },
+  "discovery": {
+    "title": "종목 발견",
+    "newFound": "새로운 급등주 발견!",
+    "andMore": "외 {count}개",
+    "viewDetails": "자세히 보기",
+    "refresh": "새로고침",
+    "totalTickers": "전체 종목",
+    "trainedTickers": "학습 완료",
+    "coverage": "커버리지",
+    "newGainers": "신규 급등주",
+    "noNewGainers": "새로운 급등주가 없습니다",
+    "newVolumeTop": "신규 거래량 상위",
+    "noNewVolume": "새로운 거래량 종목이 없습니다",
+    "trainingQueue": "학습 대기열",
+    "training": "학습중",
+    "pending": "대기중",
+    "minutes": "분",
+    "trainAll": "전체 미학습 종목 학습"
+  },
+  "notifications": {
+    "title": "알림",
+    "markAllRead": "모두 읽음",
+    "clearAll": "전체 삭제",
+    "empty": "알림이 없습니다",
+    "settings": "알림 설정"
+  },
+  "watchlist": {
+    "title": "Watchlist",
+    "edit": "편집",
+    "done": "완료",
+    "tickers": "종목",
+    "alerts": "알림",
+    "active": "활성",
+    "empty": "Watchlist가 비어있습니다",
+    "emptyHint": "종목을 추가해보세요",
+    "searchPlaceholder": "종목 검색..."
   }
 }

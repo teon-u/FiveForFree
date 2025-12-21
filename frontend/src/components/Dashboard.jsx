@@ -1,56 +1,94 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import TickerGrid from './TickerGrid'
-import PredictionPanel from './PredictionPanel'
 import ModelDetailModal from './ModelDetailModal'
+import ChartModal from './ChartModal'
+import ExportModal from './ExportModal'
+import FilterBar from './filters/FilterBar'
+import DiscoveryBanner from './DiscoveryBanner'
+import DiscoveryPanel from './DiscoveryPanel'
+import NotificationCenter from './NotificationCenter'
+import WatchlistPanel from './WatchlistPanel'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useFilterStore } from '../stores/filterStore'
+import { useSortStore } from '../stores/sortStore'
+import { useNotificationStore } from '../stores/notificationStore'
+import { multiSort } from '../utils/sortUtils'
 import { t } from '../i18n'
 
 export default function Dashboard() {
-  const [selectedTicker, setSelectedTicker] = useState(null)
   const [detailModalTicker, setDetailModalTicker] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume' (default: gainers)
+  const [chartModalTicker, setChartModalTicker] = useState(null)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [showDiscoveryPanel, setShowDiscoveryPanel] = useState(false)
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false)
+  const [showWatchlistPanel, setShowWatchlistPanel] = useState(false)
+  const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
-  const { filterMode, language } = useSettingsStore()
+  const { language } = useSettingsStore()
+  const { directions, probabilityRange } = useFilterStore()
+  const { getCurrentSortConfigs } = useSortStore()
+  const getUnreadCount = useNotificationStore(state => state.getUnreadCount)
   const tr = t(language)
 
-  // Filter predictions based on settings
-  const filterPredictions = (predictions) => {
+  const unreadCount = getUnreadCount()
+
+  // Filter predictions based on new filter store
+  const filterPredictions = useCallback((predictions) => {
     if (!predictions) return []
 
-    if (filterMode === 'up') {
-      return predictions.filter(p => p.direction === 'up')
-    } else if (filterMode === 'down') {
-      return predictions.filter(p => p.direction === 'down')
-    }
-    return predictions // 'all' mode
-  }
-
-  const filteredVolumeTop100 = filterPredictions(volumeTop100)
-  const filteredGainersTop100 = filterPredictions(gainersTop100)
-
-  // Sort predictions based on category
-  const sortPredictions = (predictions, category) => {
-    if (!predictions) return []
-    return [...predictions].sort((a, b) => {
-      if (category === 'gainers') {
-        return b.change_percent - a.change_percent // Sort by gain descending
-      } else {
-        return b.probability - a.probability // Sort by probability for volume
+    return predictions.filter(p => {
+      // Direction filter
+      if (!directions.includes(p.direction)) {
+        return false
       }
-    })
-  }
 
-  // Get currently active predictions based on toggle (sorted)
-  const activePredictions = activeCategory === 'gainers'
-    ? sortPredictions(filteredGainersTop100, 'gainers')
-    : sortPredictions(filteredVolumeTop100, 'volume')
+      // Probability filter
+      if (p.probability < probabilityRange.min || p.probability > probabilityRange.max) {
+        return false
+      }
+
+      return true
+    })
+  }, [directions, probabilityRange])
+
+  // Apply filters and sorting
+  const processedPredictions = useMemo(() => {
+    const rawPredictions = activeCategory === 'gainers' ? gainersTop100 : volumeTop100
+    const filtered = filterPredictions(rawPredictions)
+    const sortConfigs = getCurrentSortConfigs()
+    return multiSort(filtered, sortConfigs)
+  }, [activeCategory, gainersTop100, volumeTop100, filterPredictions, getCurrentSortConfigs])
+
+  const filteredGainersCount = useMemo(() => {
+    return filterPredictions(gainersTop100)?.length || 0
+  }, [gainersTop100, filterPredictions])
+
+  const filteredVolumeCount = useMemo(() => {
+    return filterPredictions(volumeTop100)?.length || 0
+  }, [volumeTop100, filterPredictions])
 
   const categoryTitle = activeCategory === 'gainers'
     ? tr('dashboard.gainersTop100')
     : tr('dashboard.volumeTop100')
 
   const categoryIcon = activeCategory === 'gainers' ? '📈' : '📊'
+
+  // Get all predictions for export
+  const allPredictions = useMemo(() => {
+    const all = [...(gainersTop100 || []), ...(volumeTop100 || [])]
+    // Remove duplicates by ticker
+    const unique = all.filter((item, index, self) =>
+      index === self.findIndex(t => t.ticker === item.ticker)
+    )
+    return unique
+  }, [gainersTop100, volumeTop100])
+
+  // Find prediction for chart modal
+  const chartPrediction = useMemo(() => {
+    if (!chartModalTicker) return null
+    return allPredictions.find(p => p.ticker === chartModalTicker) || null
+  }, [chartModalTicker, allPredictions])
 
   if (error) {
     return (
@@ -77,6 +115,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Discovery Banner */}
+      <DiscoveryBanner onOpenPanel={() => setShowDiscoveryPanel(true)} />
+
+      {/* Filter Bar */}
+      <FilterBar />
+
       {/* Category Toggle Button */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg bg-gray-800 p-1 gap-1">
@@ -94,7 +138,7 @@ export default function Dashboard() {
             <span className="text-lg">📈</span>
             {tr('dashboard.gainers')}
             <span className="text-xs opacity-75">
-              ({filteredGainersTop100?.length || 0})
+              ({filteredGainersCount})
             </span>
           </button>
           <button
@@ -111,7 +155,7 @@ export default function Dashboard() {
             <span className="text-lg">📊</span>
             {tr('dashboard.volume')}
             <span className="text-xs opacity-75">
-              ({filteredVolumeTop100?.length || 0})
+              ({filteredVolumeCount})
             </span>
           </button>
         </div>
@@ -124,30 +168,101 @@ export default function Dashboard() {
             <span className="text-2xl">{categoryIcon}</span>
             {categoryTitle}
             <span className="text-sm text-gray-400 font-normal">
-              ({activePredictions?.length || 0} {tr('dashboard.tickers')})
+              ({processedPredictions?.length || 0} {tr('dashboard.tickers')})
             </span>
           </h2>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Notification Button */}
+            <button
+              onClick={() => setShowNotificationCenter(true)}
+              className="relative p-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors"
+              aria-label="Notifications"
+            >
+              <span className="text-lg">🔔</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Watchlist Button */}
+            <button
+              onClick={() => setShowWatchlistPanel(true)}
+              className="p-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors"
+              aria-label="Watchlist"
+            >
+              <span className="text-lg">⭐</span>
+            </button>
+
+            {/* Export Button */}
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="px-4 py-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              aria-label="Export data"
+            >
+              <span>📥</span>
+              {tr('dashboard.export')}
+            </button>
+          </div>
         </div>
         <TickerGrid
-          predictions={activePredictions}
-          onTickerClick={setSelectedTicker}
+          predictions={processedPredictions}
+          onTickerClick={setChartModalTicker}
           onDetailClick={setDetailModalTicker}
         />
       </section>
-
-      {/* Prediction Detail Panel */}
-      {selectedTicker && (
-        <PredictionPanel
-          ticker={selectedTicker}
-          onClose={() => setSelectedTicker(null)}
-        />
-      )}
 
       {/* Model Detail Modal */}
       {detailModalTicker && (
         <ModelDetailModal
           ticker={detailModalTicker}
           onClose={() => setDetailModalTicker(null)}
+        />
+      )}
+
+      {/* Chart Modal */}
+      {chartModalTicker && (
+        <ChartModal
+          ticker={chartModalTicker}
+          prediction={chartPrediction}
+          onClose={() => setChartModalTicker(null)}
+        />
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          predictions={processedPredictions}
+          allPredictions={allPredictions}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* Discovery Panel */}
+      {showDiscoveryPanel && (
+        <DiscoveryPanel
+          onClose={() => setShowDiscoveryPanel(false)}
+          onViewDetail={setDetailModalTicker}
+        />
+      )}
+
+      {/* Notification Center */}
+      {showNotificationCenter && (
+        <NotificationCenter
+          onClose={() => setShowNotificationCenter(false)}
+        />
+      )}
+
+      {/* Watchlist Panel */}
+      {showWatchlistPanel && (
+        <WatchlistPanel
+          onClose={() => setShowWatchlistPanel(false)}
+          onViewDetail={(ticker) => {
+            setChartModalTicker(ticker)
+            setShowWatchlistPanel(false)
+          }}
         />
       )}
     </div>

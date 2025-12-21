@@ -7,6 +7,7 @@ import numpy as np
 from loguru import logger
 
 from src.models.base_model import BaseModel
+from config.settings import settings
 
 try:
     import lightgbm as lgb
@@ -14,6 +15,12 @@ try:
 except ImportError:
     HAS_LIGHTGBM = False
     logger.warning("LightGBM not installed. LightGBMModel will not work.")
+
+try:
+    import torch
+    HAS_CUDA = torch.cuda.is_available()
+except ImportError:
+    HAS_CUDA = False
 
 
 class LightGBMModel(BaseModel):
@@ -50,26 +57,69 @@ class LightGBMModel(BaseModel):
         if not HAS_LIGHTGBM:
             raise ImportError("LightGBM is not installed")
 
-        self._model = lgb.LGBMClassifier(
-            n_estimators=self.n_estimators,
-            max_depth=self.max_depth,
-            learning_rate=self.learning_rate,
-            random_state=42,
-            verbose=-1
-        )
+        # GPU 사용 시도 (LightGBM GPU 빌드 필요)
+        use_gpu = settings.USE_GPU and HAS_CUDA
 
-        # Convert to numpy arrays to avoid feature name warnings
-        X_train = np.asarray(X)
-        y_train = np.asarray(y)
+        # GPU 파라미터 설정 (LightGBM 4.0+)
+        gpu_params = {}
+        if use_gpu:
+            gpu_params = {
+                'device': 'gpu',
+                'gpu_platform_id': 0,
+                'gpu_device_id': 0,
+            }
 
-        eval_set = None
-        if X_val is not None and y_val is not None:
-            eval_set = [(np.asarray(X_val), np.asarray(y_val))]
+        try:
+            self._model = lgb.LGBMClassifier(
+                n_estimators=self.n_estimators,
+                max_depth=self.max_depth,
+                learning_rate=self.learning_rate,
+                random_state=42,
+                verbose=-1,
+                **gpu_params
+            )
 
-        self._model.fit(
-            X_train, y_train,
-            eval_set=eval_set
-        )
+            # Convert to numpy arrays to avoid feature name warnings
+            X_train = np.asarray(X)
+            y_train = np.asarray(y)
+
+            eval_set = None
+            if X_val is not None and y_val is not None:
+                eval_set = [(np.asarray(X_val), np.asarray(y_val))]
+
+            self._model.fit(
+                X_train, y_train,
+                eval_set=eval_set
+            )
+
+            if use_gpu:
+                logger.debug("LightGBM: Using GPU")
+
+        except Exception as e:
+            # GPU 실패 시 CPU로 fallback
+            if use_gpu:
+                logger.warning(f"LightGBM GPU failed, falling back to CPU: {e}")
+                self._model = lgb.LGBMClassifier(
+                    n_estimators=self.n_estimators,
+                    max_depth=self.max_depth,
+                    learning_rate=self.learning_rate,
+                    random_state=42,
+                    verbose=-1
+                )
+
+                X_train = np.asarray(X)
+                y_train = np.asarray(y)
+
+                eval_set = None
+                if X_val is not None and y_val is not None:
+                    eval_set = [(np.asarray(X_val), np.asarray(y_val))]
+
+                self._model.fit(
+                    X_train, y_train,
+                    eval_set=eval_set
+                )
+            else:
+                raise
 
         self.is_trained = True
         self._update_last_trained()

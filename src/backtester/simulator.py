@@ -470,6 +470,140 @@ class BacktestSimulator:
 
         return result
 
+    def simulate_with_reentry(
+        self,
+        ticker: str,
+        minute_bars: pd.DataFrame,
+        probabilities: np.ndarray,
+        model_type: str = None,
+        target: str = 'up'
+    ) -> BacktestResult:
+        """
+        Backtest simulation with immediate re-entry after trade exit.
+
+        After a trade exits (target hit or time limit), immediately check
+        the next bar for a new entry signal. This maximizes capital utilization.
+
+        Args:
+            ticker: Stock ticker
+            minute_bars: DataFrame with minute-level data
+            probabilities: Array of probabilities aligned with minute_bars
+            model_type: Type of model
+            target: 'up' or 'down'
+
+        Returns:
+            BacktestResult with all trades
+        """
+        if len(minute_bars) != len(probabilities):
+            raise ValueError("minute_bars and probabilities must have same length")
+
+        # Ensure timestamps are datetime
+        if not pd.api.types.is_datetime64_any_dtype(minute_bars['timestamp']):
+            minute_bars = minute_bars.copy()
+            minute_bars['timestamp'] = pd.to_datetime(minute_bars['timestamp'])
+
+        # Sort by timestamp and reset index
+        minute_bars = minute_bars.sort_values('timestamp').reset_index(drop=True)
+
+        # Initialize result
+        result = BacktestResult(
+            ticker=ticker,
+            model_type=model_type or 'unknown',
+            target=target,
+            start_time=minute_bars['timestamp'].min(),
+            end_time=minute_bars['timestamp'].max(),
+            total_predictions=len(minute_bars)
+        )
+
+        # Sequential simulation with immediate re-entry
+        current_idx = 0
+        total_bars = len(minute_bars)
+        signals_checked = 0
+
+        while current_idx < total_bars - self.prediction_horizon_minutes:
+            signals_checked += 1
+            probability = probabilities[current_idx]
+
+            # Check if probability meets threshold
+            if probability < self.probability_threshold:
+                # No entry, move to next bar
+                current_idx += 1
+                continue
+
+            # Entry signal found
+            entry_time = minute_bars.loc[current_idx, 'timestamp']
+            entry_price = minute_bars.loc[current_idx, 'close']
+
+            # Simulate trade
+            exit_idx = None
+            exit_price = None
+            exit_reason = None
+
+            # Check each future bar until exit condition
+            for future_idx in range(current_idx + 1, min(current_idx + self.prediction_horizon_minutes + 1, total_bars)):
+                bar = minute_bars.loc[future_idx]
+                high = bar['high']
+                close = bar['close']
+                timestamp = bar['timestamp']
+
+                # Calculate high return
+                high_return = ((high - entry_price) / entry_price) * 100
+
+                # Check if target hit
+                if high_return >= self.target_percent:
+                    exit_price = entry_price * (1 + self.target_percent / 100)
+                    exit_idx = future_idx
+                    exit_reason = 'target_hit'
+                    break
+
+                # Check if time limit reached
+                elapsed_minutes = (timestamp - entry_time).total_seconds() / 60
+                if elapsed_minutes >= self.prediction_horizon_minutes:
+                    exit_price = close
+                    exit_idx = future_idx
+                    exit_reason = 'time_limit'
+                    break
+
+            # If no exit found in loop, use last available bar
+            if exit_idx is None:
+                last_idx = min(current_idx + self.prediction_horizon_minutes, total_bars - 1)
+                exit_idx = last_idx
+                exit_price = minute_bars.loc[last_idx, 'close']
+                exit_reason = 'time_limit'
+
+            exit_time = minute_bars.loc[exit_idx, 'timestamp']
+
+            # Calculate profit
+            gross_return = ((exit_price - entry_price) / entry_price) * 100
+            net_return = gross_return - self.commission_round_trip
+            duration_minutes = (exit_time - entry_time).total_seconds() / 60
+
+            # Create trade
+            trade = Trade(
+                ticker=ticker,
+                entry_time=entry_time,
+                entry_price=entry_price,
+                exit_time=exit_time,
+                exit_price=exit_price,
+                exit_reason=exit_reason,
+                probability=probability,
+                profit_pct=net_return,
+                duration_minutes=duration_minutes,
+                model_type=model_type,
+                target=target
+            )
+            result.add_trade(trade)
+
+            # IMMEDIATE RE-ENTRY: Move to the bar right after exit
+            current_idx = exit_idx + 1
+
+        logger.info(
+            f"Re-entry backtest completed: {result.total_trades} trades "
+            f"from {signals_checked} signals checked (immediate re-entry enabled)"
+        )
+
+        return result
+
     def get_trade_outcomes(
         self,
         trades: List[Trade],

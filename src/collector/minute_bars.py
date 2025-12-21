@@ -233,7 +233,8 @@ class MinuteBarCollector:
         ticker: str,
         from_date: datetime,
         to_date: datetime,
-        limit: int = 50000
+        limit: int = 50000,
+        force: bool = False
     ) -> List[MinuteBar]:
         """
         Get 1-minute bars for a ticker within a date range.
@@ -250,6 +251,7 @@ class MinuteBarCollector:
             from_date: Start date
             to_date: End date
             limit: Maximum number of bars (not used in yfinance)
+            force: If True, ignore existing data and fetch full range from API
 
         Returns:
             List of MinuteBar objects (from DB + newly fetched)
@@ -260,6 +262,21 @@ class MinuteBarCollector:
             - 5m interval: last 60 days
         """
         try:
+            # Force mode: skip incremental logic, fetch everything from API
+            if force:
+                logger.info(
+                    f"{ticker}: Force mode - fetching full range from API "
+                    f"({from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')})"
+                )
+                new_bars = self._fetch_from_yfinance(ticker, from_date, to_date)
+
+                # Save to DB (duplicate checking is handled in save_bars)
+                if new_bars and self.use_db:
+                    self.save_bars(new_bars)
+
+                logger.info(f"{ticker}: Force mode - fetched {len(new_bars)} bars")
+                return new_bars
+
             # Step 1: Check for existing data in database
             latest_timestamp = self.get_latest_timestamp(ticker) if self.use_db else None
 
