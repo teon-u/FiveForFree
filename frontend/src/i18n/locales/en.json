@@ -20,7 +20,8 @@
     "tickers": "tickers",
     "loading": "Loading predictions...",
     "error": "Error Loading Data",
-    "noData": "No predictions available"
+    "noData": "No predictions available",
+    "export": "Export"
   },
   "tickerCard": {
     "model": "Model",

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import TickerCard from './TickerCard'
 import { usePriceStore } from '../stores/priceStore'
 
@@ -7,6 +8,34 @@ import { usePriceStore } from '../stores/priceStore'
 vi.mock('../stores/priceStore', () => ({
   usePriceStore: vi.fn()
 }))
+
+// Mock the usePriceHistory hook (which includes useSparkline)
+vi.mock('../hooks/usePriceHistory', () => ({
+  useSparkline: vi.fn(() => ({
+    data: { data: [100, 101, 102, 101, 103] },
+    isLoading: false,
+    error: null
+  }))
+}))
+
+// Create a wrapper with QueryClientProvider
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  })
+  function TestWrapper({ children }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+  }
+  return TestWrapper
+}
 
 describe('TickerCard', () => {
   const defaultPrediction = {
@@ -41,7 +70,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     expect(screen.getByText('AAPL')).toBeInTheDocument()
@@ -53,7 +83,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     // Probability is displayed in prob-badge div
@@ -68,7 +99,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     // Check for the up arrow in the prob-badge
@@ -84,7 +116,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     expect(screen.getByText('A')).toBeInTheDocument()
@@ -96,7 +129,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     // ensemble should be displayed as ENS
@@ -109,7 +143,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     expect(screen.getByText(/55/)).toBeInTheDocument()
@@ -128,7 +163,8 @@ describe('TickerCard', () => {
         prediction={highProbPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     const card = container.querySelector('.ticker-card')
@@ -149,7 +185,8 @@ describe('TickerCard', () => {
         prediction={downPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     const card = container.querySelector('.ticker-card')
@@ -176,7 +213,8 @@ describe('TickerCard', () => {
         prediction={defaultPrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     // Should display real-time price
@@ -195,7 +233,8 @@ describe('TickerCard', () => {
         prediction={cGradePrediction}
         onClick={mockOnClick}
         onDetailClick={mockOnDetailClick}
-      />
+      />,
+      { wrapper: createWrapper() }
     )
 
     const card = container.querySelector('.ticker-card')

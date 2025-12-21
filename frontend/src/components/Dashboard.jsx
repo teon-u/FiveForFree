@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback } from 'react'
 import TickerGrid from './TickerGrid'
-import PredictionPanel from './PredictionPanel'
 import ModelDetailModal from './ModelDetailModal'
+import ChartModal from './ChartModal'
+import ExportModal from './ExportModal'
 import FilterBar from './filters/FilterBar'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -11,8 +12,9 @@ import { multiSort } from '../utils/sortUtils'
 import { t } from '../i18n'
 
 export default function Dashboard() {
-  const [selectedTicker, setSelectedTicker] = useState(null)
   const [detailModalTicker, setDetailModalTicker] = useState(null)
+  const [chartModalTicker, setChartModalTicker] = useState(null)
+  const [showExportModal, setShowExportModal] = useState(false)
   const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
   const { language } = useSettingsStore()
@@ -60,6 +62,22 @@ export default function Dashboard() {
     : tr('dashboard.volumeTop100')
 
   const categoryIcon = activeCategory === 'gainers' ? '📈' : '📊'
+
+  // Get all predictions for export
+  const allPredictions = useMemo(() => {
+    const all = [...(gainersTop100 || []), ...(volumeTop100 || [])]
+    // Remove duplicates by ticker
+    const unique = all.filter((item, index, self) =>
+      index === self.findIndex(t => t.ticker === item.ticker)
+    )
+    return unique
+  }, [gainersTop100, volumeTop100])
+
+  // Find prediction for chart modal
+  const chartPrediction = useMemo(() => {
+    if (!chartModalTicker) return null
+    return allPredictions.find(p => p.ticker === chartModalTicker) || null
+  }, [chartModalTicker, allPredictions])
 
   if (error) {
     return (
@@ -139,27 +157,46 @@ export default function Dashboard() {
               ({processedPredictions?.length || 0} {tr('dashboard.tickers')})
             </span>
           </h2>
+          {/* Export Button */}
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="px-4 py-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+            aria-label="Export data"
+          >
+            <span>📥</span>
+            {tr('dashboard.export')}
+          </button>
         </div>
         <TickerGrid
           predictions={processedPredictions}
-          onTickerClick={setSelectedTicker}
+          onTickerClick={setChartModalTicker}
           onDetailClick={setDetailModalTicker}
         />
       </section>
-
-      {/* Prediction Detail Panel */}
-      {selectedTicker && (
-        <PredictionPanel
-          ticker={selectedTicker}
-          onClose={() => setSelectedTicker(null)}
-        />
-      )}
 
       {/* Model Detail Modal */}
       {detailModalTicker && (
         <ModelDetailModal
           ticker={detailModalTicker}
           onClose={() => setDetailModalTicker(null)}
+        />
+      )}
+
+      {/* Chart Modal */}
+      {chartModalTicker && (
+        <ChartModal
+          ticker={chartModalTicker}
+          prediction={chartPrediction}
+          onClose={() => setChartModalTicker(null)}
+        />
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          predictions={processedPredictions}
+          allPredictions={allPredictions}
+          onClose={() => setShowExportModal(false)}
         />
       )}
     </div>

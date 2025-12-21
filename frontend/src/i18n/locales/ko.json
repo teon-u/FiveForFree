@@ -20,7 +20,8 @@
     "tickers": "종목",
     "loading": "예측 데이터 로딩 중...",
     "error": "데이터 로딩 오류",
-    "noData": "사용 가능한 예측 없음"
+    "noData": "사용 가능한 예측 없음",
+    "export": "내보내기"
   },
   "tickerCard": {
     "model": "모델",

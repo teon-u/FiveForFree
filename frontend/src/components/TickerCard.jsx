@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import clsx from 'clsx'
 import { usePriceStore } from '../stores/priceStore'
+import { useSparkline } from '../hooks/usePriceHistory'
+import Sparkline from './Sparkline'
 
 export default function TickerCard({ prediction, onClick, onDetailClick }) {
   const {
@@ -17,6 +19,9 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
   // Get real-time price from store
   const priceData = usePriceStore((state) => state.prices[ticker])
   const clearPriceChanged = usePriceStore((state) => state.clearPriceChanged)
+
+  // Get sparkline data
+  const { data: sparklineData } = useSparkline(ticker)
 
   // Use real-time change_percent if available, otherwise use prediction data
   const displayChangePercent = priceData?.change_percent ?? change_percent
@@ -127,6 +132,15 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
             {direction === 'up' ? '🟢' : '🔴'}
           </div>
         )}
+      </div>
+
+      {/* Sparkline */}
+      <div className="mb-2">
+        <Sparkline
+          data={sparklineData?.data}
+          direction={sparklineData?.direction || direction}
+          height={32}
+        />
       </div>
 
       {/* Probability */}
