@@ -23,7 +23,7 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
@@ -44,8 +44,8 @@ class MockWebSocket {
     }, 0)
   }
 
-  send(data) {
-    // Mock send
+  send() {
+    // Mock send - ignore data parameter
   }
 
   close() {
@@ -54,4 +54,4 @@ class MockWebSocket {
   }
 }
 
-global.WebSocket = MockWebSocket
+globalThis.WebSocket = MockWebSocket

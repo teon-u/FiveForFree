@@ -1,50 +1,59 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import TickerGrid from './TickerGrid'
 import PredictionPanel from './PredictionPanel'
 import ModelDetailModal from './ModelDetailModal'
+import FilterBar from './filters/FilterBar'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useFilterStore } from '../stores/filterStore'
+import { useSortStore } from '../stores/sortStore'
+import { multiSort } from '../utils/sortUtils'
 import { t } from '../i18n'
 
 export default function Dashboard() {
   const [selectedTicker, setSelectedTicker] = useState(null)
   const [detailModalTicker, setDetailModalTicker] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume' (default: gainers)
+  const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
-  const { filterMode, language } = useSettingsStore()
+  const { language } = useSettingsStore()
+  const { directions, probabilityRange } = useFilterStore()
+  const { getCurrentSortConfigs } = useSortStore()
   const tr = t(language)
 
-  // Filter predictions based on settings
-  const filterPredictions = (predictions) => {
+  // Filter predictions based on new filter store
+  const filterPredictions = useCallback((predictions) => {
     if (!predictions) return []
 
-    if (filterMode === 'up') {
-      return predictions.filter(p => p.direction === 'up')
-    } else if (filterMode === 'down') {
-      return predictions.filter(p => p.direction === 'down')
-    }
-    return predictions // 'all' mode
-  }
-
-  const filteredVolumeTop100 = filterPredictions(volumeTop100)
-  const filteredGainersTop100 = filterPredictions(gainersTop100)
-
-  // Sort predictions based on category
-  const sortPredictions = (predictions, category) => {
-    if (!predictions) return []
-    return [...predictions].sort((a, b) => {
-      if (category === 'gainers') {
-        return b.change_percent - a.change_percent // Sort by gain descending
-      } else {
-        return b.probability - a.probability // Sort by probability for volume
+    return predictions.filter(p => {
+      // Direction filter
+      if (!directions.includes(p.direction)) {
+        return false
       }
-    })
-  }
 
-  // Get currently active predictions based on toggle (sorted)
-  const activePredictions = activeCategory === 'gainers'
-    ? sortPredictions(filteredGainersTop100, 'gainers')
-    : sortPredictions(filteredVolumeTop100, 'volume')
+      // Probability filter
+      if (p.probability < probabilityRange.min || p.probability > probabilityRange.max) {
+        return false
+      }
+
+      return true
+    })
+  }, [directions, probabilityRange])
+
+  // Apply filters and sorting
+  const processedPredictions = useMemo(() => {
+    const rawPredictions = activeCategory === 'gainers' ? gainersTop100 : volumeTop100
+    const filtered = filterPredictions(rawPredictions)
+    const sortConfigs = getCurrentSortConfigs()
+    return multiSort(filtered, sortConfigs)
+  }, [activeCategory, gainersTop100, volumeTop100, filterPredictions, getCurrentSortConfigs])
+
+  const filteredGainersCount = useMemo(() => {
+    return filterPredictions(gainersTop100)?.length || 0
+  }, [gainersTop100, filterPredictions])
+
+  const filteredVolumeCount = useMemo(() => {
+    return filterPredictions(volumeTop100)?.length || 0
+  }, [volumeTop100, filterPredictions])
 
   const categoryTitle = activeCategory === 'gainers'
     ? tr('dashboard.gainersTop100')
@@ -77,6 +86,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Filter Bar */}
+      <FilterBar />
+
       {/* Category Toggle Button */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg bg-gray-800 p-1 gap-1">
@@ -94,7 +106,7 @@ export default function Dashboard() {
             <span className="text-lg">📈</span>
             {tr('dashboard.gainers')}
             <span className="text-xs opacity-75">
-              ({filteredGainersTop100?.length || 0})
+              ({filteredGainersCount})
             </span>
           </button>
           <button
@@ -111,7 +123,7 @@ export default function Dashboard() {
             <span className="text-lg">📊</span>
             {tr('dashboard.volume')}
             <span className="text-xs opacity-75">
-              ({filteredVolumeTop100?.length || 0})
+              ({filteredVolumeCount})
             </span>
           </button>
         </div>
@@ -124,12 +136,12 @@ export default function Dashboard() {
             <span className="text-2xl">{categoryIcon}</span>
             {categoryTitle}
             <span className="text-sm text-gray-400 font-normal">
-              ({activePredictions?.length || 0} {tr('dashboard.tickers')})
+              ({processedPredictions?.length || 0} {tr('dashboard.tickers')})
             </span>
           </h2>
         </div>
         <TickerGrid
-          predictions={activePredictions}
+          predictions={processedPredictions}
           onTickerClick={setSelectedTicker}
           onDetailClick={setDetailModalTicker}
         />
