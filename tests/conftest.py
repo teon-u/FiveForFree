@@ -1,9 +1,13 @@
 """Pytest configuration and fixtures for API testing."""
+import os
 import pytest
 from datetime import datetime, timedelta
 from typing import Dict, Any, Generator
 from unittest.mock import MagicMock, patch
 import numpy as np
+
+# Set test database URL BEFORE any app imports to use in-memory SQLite
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from fastapi.testclient import TestClient
 
@@ -307,5 +311,7 @@ def mock_market_status():
         'current_time_et': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'market_open': '09:30',
         'market_close': '16:00',
+        'last_close_et': (datetime.now() - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S'),
+        'last_close_iso': (datetime.now() - timedelta(hours=1)).isoformat(),
         'reason': 'After hours'
     }

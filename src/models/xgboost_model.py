@@ -60,12 +60,16 @@ class XGBoostModel(BaseModel):
             random_state=42
         )
 
+        # Convert to numpy arrays to avoid feature name warnings
+        X_train = np.asarray(X)
+        y_train = np.asarray(y)
+
         eval_set = None
         if X_val is not None and y_val is not None:
-            eval_set = [(X_val, y_val)]
+            eval_set = [(np.asarray(X_val), np.asarray(y_val))]
 
         self._model.fit(
-            X, y,
+            X_train, y_train,
             eval_set=eval_set,
             verbose=False
         )

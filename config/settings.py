@@ -1,13 +1,13 @@
 """Global configuration settings."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Finnhub API
-    FINNHUB_API_KEY: str
+    # Finnhub API (set default for testing)
+    FINNHUB_API_KEY: str = ""
 
     # Collection Settings
     TOP_N_VOLUME: int = 50  # Reduced for free tier API limits
@@ -82,9 +82,10 @@ class Settings(BaseSettings):
     MARKET_CLOSE_HOUR: int = 16
     MARKET_CLOSE_MINUTE: int = 0
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8"
+    )
 
 
 # Global settings instance

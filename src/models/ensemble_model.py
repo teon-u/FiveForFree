@@ -229,6 +229,10 @@ class EnsembleModel(BaseModel):
         y_valid = y[valid_mask] if hasattr(y, '__getitem__') else np.array(y)[valid_mask]
 
         if len(X_meta_valid) > 10:  # Need minimum samples
+            # Ensure numpy arrays to avoid feature name warnings
+            X_meta_train = np.asarray(X_meta_valid)
+            y_meta_train = np.asarray(y_valid)
+
             if HAS_XGBOOST:
                 # Use XGBoost as meta-learner
                 self._stacking_learner = xgb.XGBClassifier(
@@ -240,7 +244,7 @@ class EnsembleModel(BaseModel):
                     use_label_encoder=False,
                     random_state=42
                 )
-                self._stacking_learner.fit(X_meta_valid, y_valid)
+                self._stacking_learner.fit(X_meta_train, y_meta_train)
                 logger.info("Trained XGBoost meta-learner")
             elif HAS_SKLEARN:
                 # Fallback to LogisticRegression
@@ -248,7 +252,7 @@ class EnsembleModel(BaseModel):
                     max_iter=1000,
                     random_state=42
                 )
-                self._stacking_learner.fit(X_meta_valid, y_valid)
+                self._stacking_learner.fit(X_meta_train, y_meta_train)
                 logger.info("Trained LogisticRegression meta-learner")
 
         self.is_trained = True
