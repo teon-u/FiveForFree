@@ -83,14 +83,14 @@ def init_dependencies():
             logger.warning(f"Failed to initialize MinuteBarCollector: {e}")
 
         try:
-            _quote_collector = QuoteCollector(api_key=settings.POLYGON_API_KEY)
-            logger.info("QuoteCollector initialized")
+            _quote_collector = QuoteCollector()
+            logger.info("QuoteCollector initialized (using Finnhub)")
         except Exception as e:
             logger.warning(f"Failed to initialize QuoteCollector: {e}")
 
         try:
-            _market_context_collector = MarketContextCollector(api_key=settings.POLYGON_API_KEY)
-            logger.info("MarketContextCollector initialized")
+            _market_context_collector = MarketContextCollector()
+            logger.info("MarketContextCollector initialized (using Finnhub)")
         except Exception as e:
             logger.warning(f"Failed to initialize MarketContextCollector: {e}")
 
