@@ -16,13 +16,15 @@
 
 ```
 기존 문제:
-- 5% 상승/하락은 전체 데이터의 ~3-5%만 해당 (극심한 클래스 불균형)
+- 1% 상승/하락은 전체 데이터의 일부만 해당 (클래스 불균형)
 - 모델이 희소 이벤트를 학습하기 어려움
 
 해결책:
-- 변동성(±5%)과 방향(상승/하락)을 분리하여 예측
+- 변동성(±1%)과 방향(상승/하락)을 분리하여 예측
 - 방향 예측은 ~50:50으로 균형적인 데이터셋
 - 두 구조를 앙상블하여 최종 확률 계산
+
+Note: TARGET_PERCENT는 settings.py에서 1.0%로 설정됨
 ```
 
 ---
@@ -96,23 +98,23 @@
 
 ### 3.1 Structure A: 직접 예측 (Direct Prediction)
 
-기존 방식으로, 5% 상승/하락을 직접 예측합니다.
+기존 방식으로, TARGET_PERCENT% 상승/하락을 직접 예측합니다. (현재 1%)
 
 ```python
 # 레이블 정의
-label_up = 1   # 60분 내 +5% 도달
-label_down = 1 # 60분 내 -5% 도달
+label_up = 1   # 60분 내 +1% 도달
+label_down = 1 # 60분 내 -1% 도달
 
 # 모델
-- UP 모델: P(+5% 상승) 예측
-- DOWN 모델: P(-5% 하락) 예측
+- UP 모델: P(+1% 상승) 예측
+- DOWN 모델: P(-1% 하락) 예측
 
 # 각 모델당 5가지 타입
 MODEL_TYPES = ["xgboost", "lightgbm", "lstm", "transformer", "ensemble"]
 ```
 
 **장점**: 단순하고 직관적
-**단점**: 클래스 불균형 (~5% positive)
+**단점**: 클래스 불균형
 
 ### 3.2 Structure B: 하이브리드 예측 (Volatility + Direction)
 
@@ -120,7 +122,7 @@ MODEL_TYPES = ["xgboost", "lightgbm", "lstm", "transformer", "ensemble"]
 
 ```python
 # 레이블 정의
-label_volatility = 1  # 60분 내 ±5% 변동 발생 (up OR down)
+label_volatility = 1  # 60분 내 ±1% 변동 발생 (up OR down)
 label_direction = 1   # 변동 시 상승이 먼저 발생 (up first)
 label_direction = 0   # 변동 시 하락이 먼저 발생 (down first)
 
@@ -177,7 +179,7 @@ CALIBRATION_METHOD: str = "isotonic"  # 확률 캘리브레이션 방법
 ```
 역할: 레이블 생성
 추가된 기능:
-- label_volatility 생성 (±5% 변동 여부)
+- label_volatility 생성 (±TARGET_PERCENT% 변동 여부, 현재 1%)
 - label_direction 생성 (상승/하락 먼저 도달)
 - get_label_statistics()에 Structure B 통계 추가
 ```

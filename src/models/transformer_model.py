@@ -10,10 +10,13 @@ from loguru import logger
 from sklearn.preprocessing import StandardScaler
 
 from src.models.base_model import BaseModel
+from config.settings import settings
 
 try:
     import torch
     import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset
+    from torch.cuda.amp import GradScaler, autocast
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -98,7 +101,7 @@ class TransformerModel(BaseModel):
         dropout: float = 0.1,
         learning_rate: float = 0.001,
         epochs: int = 50,
-        batch_size: int = 32,
+        batch_size: int = None,  # None이면 settings에서 가져옴
         sequence_length: int = 60,
         **kwargs
     ):
@@ -125,7 +128,7 @@ class TransformerModel(BaseModel):
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.epochs = epochs
-        self.batch_size = batch_size
+        self.batch_size = batch_size if batch_size is not None else settings.TRANSFORMER_BATCH_SIZE
         self.sequence_length = sequence_length
 
         self._model: Optional[TransformerClassifier] = None
@@ -180,24 +183,47 @@ class TransformerModel(BaseModel):
         # Use BCEWithLogitsLoss for numerical stability (combines Sigmoid + BCELoss)
         criterion = nn.BCEWithLogitsLoss()
 
-        # Convert to tensors
-        X_tensor = torch.FloatTensor(X_seq).to(self._device)
-        y_tensor = torch.FloatTensor(y_seq).to(self._device)
+        # Create DataLoader for efficient GPU utilization
+        # Windows에서는 num_workers=0 사용 (multiprocessing 호환성)
+        use_cuda = self._device.type == 'cuda'
+        dataset = TensorDataset(
+            torch.FloatTensor(X_seq),
+            torch.FloatTensor(y_seq)
+        )
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=0,  # Windows 호환성
+            pin_memory=use_cuda,  # GPU 사용 시 CPU→GPU 전송 최적화
+            drop_last=True
+        )
 
-        # Training loop
+        # Mixed Precision (AMP) for RTX GPU optimization
+        scaler = GradScaler(enabled=use_cuda)
+
+        # Training loop with AMP
         self._model.train()
         for epoch in range(self.epochs):
-            for i in range(0, len(X_tensor), self.batch_size):
-                batch_X = X_tensor[i:i + self.batch_size]
-                batch_y = y_tensor[i:i + self.batch_size]
+            for batch_X, batch_y in dataloader:
+                # 비동기 전송으로 오버랩
+                batch_X = batch_X.to(self._device, non_blocking=True)
+                batch_y = batch_y.to(self._device, non_blocking=True)
 
-                optimizer.zero_grad()
-                outputs = self._model(batch_X)
-                loss = criterion(outputs, batch_y)
-                loss.backward()
+                optimizer.zero_grad(set_to_none=True)  # 더 효율적인 메모리 초기화
+
+                # Mixed precision forward pass
+                with autocast(enabled=use_cuda):
+                    outputs = self._model(batch_X)
+                    loss = criterion(outputs, batch_y)
+
+                # Scaled backward pass
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
                 # Gradient clipping for stability
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), max_norm=1.0)
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
 
         self.is_trained = True
         self._update_last_trained()

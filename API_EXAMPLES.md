@@ -261,8 +261,8 @@ setInterval(() => {
 - `ticker`: Stock symbol
 - `timestamp`: Prediction timestamp (ISO 8601)
 - `current_price`: Current stock price
-- `up_probability`: Probability of 5%+ upward movement (0-1)
-- `down_probability`: Probability of 5%+ downward movement (0-1)
+- `up_probability`: Probability of TARGET_PERCENT%+ upward movement (0-1), currently 1%
+- `down_probability`: Probability of TARGET_PERCENT%+ downward movement (0-1), currently 1%
 - `best_up_model`: Best performing model for up prediction
 - `best_down_model`: Best performing model for down prediction
 - `up_model_accuracy`: 50-hour accuracy of up model (0-1)

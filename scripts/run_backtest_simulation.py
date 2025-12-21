@@ -1,6 +1,11 @@
 """
 Backtest Simulation Script
 Calculates expected returns from simulated trading
+
+Features:
+- Immediate re-entry after trade exit (maximizes capital utilization)
+- No fixed interval between trades
+- Sequential simulation with continuous position management
 """
 import sys
 sys.path.insert(0, '.')
@@ -12,7 +17,7 @@ import numpy as np
 from config.settings import settings
 
 def run_simulation():
-    print('=== Backtest Simulation ===\n')
+    print('=== Backtest Simulation (Immediate Re-entry) ===\n')
 
     # Database connection
     db_path = settings.DATABASE_URL.replace('sqlite:///', '')
@@ -37,7 +42,7 @@ def run_simulation():
     THRESHOLD = 0.70  # 70% probability threshold
     TARGET_PERCENT = 1.0  # 1% target
     STOP_LOSS_PERCENT = 2.0  # 2% stop loss
-    HORIZON_MINUTES = 60  # 60 minutes max hold
+    HORIZON_BARS = 12  # 12 bars = 60 minutes with 5-min bars
     COMMISSION = 0.2  # 0.2% round-trip commission
     POSITION_SIZE = 10000  # $10,000 per trade
 
@@ -45,15 +50,16 @@ def run_simulation():
     print(f'Entry threshold: {THRESHOLD:.0%}')
     print(f'Target profit: {TARGET_PERCENT}%')
     print(f'Stop loss: {STOP_LOSS_PERCENT}%')
-    print(f'Max hold time: {HORIZON_MINUTES} min')
+    print(f'Max hold time: {HORIZON_BARS} bars (60 min with 5-min bars)')
     print(f'Commission (round-trip): {COMMISSION}%')
     print(f'Position size: ${POSITION_SIZE:,}')
+    print(f'Re-entry mode: IMMEDIATE (after each trade exit)')
 
     # Get unique tickers
     tickers = bars_df.symbol.unique()
     print(f'\nAnalyzing {len(tickers)} tickers...')
 
-    # Run backtest simulation
+    # Run backtest simulation with immediate re-entry
     all_trades = []
 
     for ticker in tickers:
@@ -66,12 +72,16 @@ def run_simulation():
         ticker_bars['returns_15'] = ticker_bars['close'].pct_change(15)
         ticker_bars['vol_ratio'] = ticker_bars['volume'] / ticker_bars['volume'].rolling(20).mean()
 
-        # Generate pseudo-predictions based on momentum
-        for i in range(50, len(ticker_bars) - HORIZON_MINUTES, 12):
+        # IMMEDIATE RE-ENTRY: Sequential simulation
+        current_idx = 50  # Start after warmup period
+        total_bars = len(ticker_bars)
+
+        while current_idx < total_bars - HORIZON_BARS:
             try:
-                row = ticker_bars.iloc[i]
+                row = ticker_bars.iloc[current_idx]
 
                 if pd.isna(row['returns_5']) or pd.isna(row['vol_ratio']):
+                    current_idx += 1
                     continue
 
                 # Calculate pseudo-probability based on momentum
@@ -82,35 +92,38 @@ def run_simulation():
                 prob = max(0.4, min(0.9, base_prob))
 
                 if prob < THRESHOLD:
+                    current_idx += 1
                     continue
 
+                # Entry signal found
                 entry_price = row['close']
                 entry_time = row['timestamp']
 
-                future_bars = ticker_bars.iloc[i+1:i+HORIZON_MINUTES+1]
-                if len(future_bars) < 10:
-                    continue
-
+                # Simulate trade
+                exit_idx = None
                 exit_price = None
                 exit_reason = None
 
-                for j in range(len(future_bars)):
-                    future_row = future_bars.iloc[j]
+                for j in range(current_idx + 1, min(current_idx + HORIZON_BARS + 1, total_bars)):
+                    future_row = ticker_bars.iloc[j]
                     high_return = (future_row['high'] - entry_price) / entry_price * 100
                     low_return = (future_row['low'] - entry_price) / entry_price * 100
 
                     if high_return >= TARGET_PERCENT:
                         exit_price = entry_price * (1 + TARGET_PERCENT / 100)
                         exit_reason = 'target_hit'
+                        exit_idx = j
                         break
 
                     if low_return <= -STOP_LOSS_PERCENT:
                         exit_price = entry_price * (1 - STOP_LOSS_PERCENT / 100)
                         exit_reason = 'stop_loss'
+                        exit_idx = j
                         break
 
                 if exit_price is None:
-                    exit_price = future_bars.iloc[-1]['close']
+                    exit_idx = min(current_idx + HORIZON_BARS, total_bars - 1)
+                    exit_price = ticker_bars.iloc[exit_idx]['close']
                     exit_reason = 'time_limit'
 
                 gross_pnl = (exit_price - entry_price) / entry_price * 100
@@ -128,7 +141,12 @@ def run_simulation():
                     'net_pnl': net_pnl,
                     'dollar_pnl': dollar_pnl
                 })
+
+                # IMMEDIATE RE-ENTRY: Move to bar right after exit
+                current_idx = exit_idx + 1
+
             except Exception:
+                current_idx += 1
                 continue
 
     print(f'\n=== Backtest Results ===')

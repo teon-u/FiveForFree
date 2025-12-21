@@ -24,6 +24,9 @@ Usage:
 
     # Train only tree models (faster)
     python scripts/train_all_models.py --model-types xgboost lightgbm
+
+    # Quiet mode (TQDM progress bar only)
+    python scripts/train_all_models.py --quiet
 """
 
 import argparse
@@ -58,22 +61,26 @@ from src.processor.label_generator import LabelGenerator
 warnings.filterwarnings("ignore")
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(verbose: bool = False, quiet: bool = False) -> None:
     """
     Configure logging.
 
     Args:
         verbose: Enable verbose (DEBUG) logging
+        quiet: Suppress console output (TQDM only), logs still go to file
     """
     logger.remove()
-    log_level = "DEBUG" if verbose else "INFO"
-    logger.add(
-        sys.stderr,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level=log_level,
-    )
 
-    # Also log to file
+    # Console logging (unless quiet mode)
+    if not quiet:
+        log_level = "DEBUG" if verbose else "INFO"
+        logger.add(
+            sys.stderr,
+            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+            level=log_level,
+        )
+
+    # Always log to file
     log_file = (
         Path("./logs")
         / f"train_models_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -183,8 +190,8 @@ def prepare_training_data(
     try:
         logger.info(f"{ticker}: Preparing training data...")
 
-        # Initialize processors
-        feature_engineer = FeatureEngineer()
+        # Initialize processors with ticker for enhanced features
+        feature_engineer = FeatureEngineer(ticker=ticker)
         label_generator = LabelGenerator(
             target_percent=settings.TARGET_PERCENT,
             prediction_horizon_minutes=settings.PREDICTION_HORIZON_MINUTES,
@@ -330,8 +337,8 @@ def main() -> int:
     parser.add_argument(
         "--days",
         type=int,
-        default=30,
-        help="Number of days of data to use for training (default: 30)",
+        default=60,
+        help="Number of days of data to use for training (default: 60)",
     )
     parser.add_argument(
         "--workers",
@@ -359,11 +366,15 @@ def main() -> int:
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
+    parser.add_argument(
+        "--quiet", "-q", action="store_true",
+        help="Quiet mode: show only TQDM progress bar (logs saved to file)"
+    )
 
     args = parser.parse_args()
 
     # Setup logging
-    setup_logging(args.verbose)
+    setup_logging(args.verbose, args.quiet)
 
     logger.info("=" * 80)
     logger.info("NASDAQ Prediction System - Model Training")
@@ -488,7 +499,7 @@ def main() -> int:
 
         if successful > 0:
             logger.success("\nModel training complete!")
-            logger.info(f"\nModels saved to: {model_manager.models_dir}")
+            logger.info(f"\nModels saved to: {model_manager.models_path}")
             return 0
         else:
             logger.error("\nAll training failed!")

@@ -2,12 +2,12 @@
 Label Generation Module for NASDAQ Prediction System
 
 Generates binary labels for up/down predictions based on:
-- 5% threshold for significant price movement
+- 1% threshold for significant price movement (configurable via settings.TARGET_PERCENT)
 - 60-minute prediction horizon
 - Tracks maximum gain/loss for analysis
 
 Hybrid-Ensemble Approach (Structure B):
-- Volatility label: 1 if ±5% movement occurs within horizon
+- Volatility label: 1 if ±1% movement occurs within horizon
 - Direction label: 1 if upward (given volatility), 0 if downward
 """
 
@@ -26,20 +26,21 @@ class LabelGenerator:
     Generate training labels for NASDAQ prediction models.
 
     Structure A (Direct Prediction):
-    - label_up: 1 if price reaches +5% within 60 minutes, else 0
-    - label_down: 1 if price reaches -5% within 60 minutes, else 0
+    - label_up: 1 if price reaches +TARGET_PERCENT% within 60 minutes, else 0
+    - label_down: 1 if price reaches -TARGET_PERCENT% within 60 minutes, else 0
 
     Structure B (Hybrid-Ensemble):
-    - label_volatility: 1 if price reaches ±5% within 60 minutes, else 0
+    - label_volatility: 1 if price reaches ±TARGET_PERCENT% within 60 minutes, else 0
     - label_direction: 1 if upward movement comes first (given volatility), else 0
       (only meaningful when label_volatility=1)
 
     Both labels can be 1 simultaneously (high volatility scenario).
+    Default TARGET_PERCENT is 1.0% (configurable via settings).
     """
 
     def __init__(
         self,
-        target_percent: float = 5.0,
+        target_percent: float = 1.0,
         prediction_horizon_minutes: int = 60,
         commission_pct: float = 0.1
     ):
@@ -47,7 +48,7 @@ class LabelGenerator:
         Initialize label generator.
 
         Args:
-            target_percent: Target profit/loss percentage (default 5.0)
+            target_percent: Target profit/loss percentage (default 1.0)
             prediction_horizon_minutes: Time horizon for prediction (default 60)
             commission_pct: Trading commission per trade (default 0.1%)
         """

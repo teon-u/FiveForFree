@@ -17,6 +17,9 @@ Usage:
 
     # Update existing data (collect only missing bars)
     python scripts/collect_historical.py --update
+
+    # Force full re-collection (ignore existing data, fetch from API)
+    python scripts/collect_historical.py --days 60 --force
 """
 
 import argparse
@@ -136,6 +139,7 @@ def collect_ticker_data(
     days: int,
     collector: MinuteBarCollector,
     update_mode: bool = False,
+    force_mode: bool = False,
     ticker_info: Optional[dict] = None,
 ) -> dict:
     """
@@ -152,6 +156,7 @@ def collect_ticker_data(
         days: Number of days to collect
         collector: MinuteBarCollector instance
         update_mode: If True, only collect missing data
+        force_mode: If True, ignore existing data and fetch full range
         ticker_info: Optional dict with 'name' and 'market_cap' for the ticker
 
     Returns:
@@ -184,7 +189,12 @@ def collect_ticker_data(
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
-        if update_mode:
+        if force_mode:
+            logger.info(
+                f"{ticker}: Force mode - fetching full {days} days "
+                f"({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})"
+            )
+        elif update_mode:
             # Check existing data
             existing_range = get_existing_data_range(ticker)
             if existing_range:
@@ -211,7 +221,7 @@ def collect_ticker_data(
             existing_count = db.execute(stmt).scalar() or 0
 
         # Collect minute bars (MinuteBarCollector handles DB saving internally)
-        bars = collector.get_bars(ticker, start_date, end_date)
+        bars = collector.get_bars(ticker, start_date, end_date, force=force_mode)
 
         if not bars:
             logger.warning(f"{ticker}: No data collected")
@@ -273,6 +283,11 @@ def main() -> int:
         help="Update mode: only collect missing data since last collection",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force mode: ignore existing data and fetch full range from API",
+    )
+    parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
     parser.add_argument(
@@ -291,6 +306,7 @@ def main() -> int:
     logger.info("=" * 80)
     logger.info(f"Days to collect: {args.days}")
     logger.info(f"Update mode: {args.update}")
+    logger.info(f"Force mode: {args.force}")
     logger.info("")
 
     try:
@@ -332,6 +348,7 @@ def main() -> int:
                 args.days,
                 collector,
                 update_mode=args.update,
+                force_mode=args.force,
                 ticker_info=info,
             )
 
