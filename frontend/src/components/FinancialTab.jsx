@@ -11,7 +11,7 @@ import {
   Cell
 } from 'recharts'
 
-export default function FinancialTab({ data, ticker, tr }) {
+export default function FinancialTab({ data, tr }) {
   const {
     equity_curve,
     risk_metrics,

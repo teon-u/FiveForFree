@@ -10,15 +10,14 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   Cell,
 } from 'recharts'
 
-export default function EnsembleTab({ data, ticker, tr }) {
+export default function EnsembleTab({ data, tr }) {
   const { meta_learner, base_models, current_agreement, ensemble_vs_base } = data
   // Use translation if provided, otherwise use default English
-  const t = tr || ((key) => key.split('.').pop())
+  void tr  // Reserved for future i18n support
 
   // Format model names
   const formatModelName = (name) => {
@@ -205,7 +204,7 @@ export default function EnsembleTab({ data, ticker, tr }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {base_models.map((model, index) => (
+                  {base_models.map((model) => (
                     <tr key={model.type} className={`border-b border-surface-lighter/50 ${!model.is_trained && 'opacity-50'}`}>
                       <td className="py-2 text-white font-medium">{formatModelName(model.type)}</td>
                       <td className="text-right py-2 text-gray-300">{(model.accuracy * 100).toFixed(1)}%</td>

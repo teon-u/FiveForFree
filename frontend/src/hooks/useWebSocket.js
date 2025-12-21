@@ -109,7 +109,7 @@ export function useWebSocket() {
         wsRef.current.close()
       }
     }
-  }, [queryClient])
+  }, [queryClient, setConnected, updatePrices])
 
   return {
     isConnected,

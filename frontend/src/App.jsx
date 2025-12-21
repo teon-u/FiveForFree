@@ -9,7 +9,7 @@ import { t } from './i18n'
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const { isConnected, lastUpdate } = useWebSocket()
-  const { isMarketOpen, lastCloseKst, reason } = useMarketStatus()
+  const { isMarketOpen, lastCloseKst } = useMarketStatus()
   const { language } = useSettingsStore()
   const tr = t(language)
 

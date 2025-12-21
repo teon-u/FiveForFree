@@ -9,15 +9,14 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
 
-export default function PerformanceTab({ data, ticker, tr }) {
+export default function PerformanceTab({ data, tr }) {
   const { confusion_matrix, metrics, roc_curve, pr_curve, time_series, calibration } = data
-  // Use translation if provided, otherwise use default English
-  const t = tr || ((key) => key.split('.').pop())
+  // Reserved for future i18n support
+  void tr
 
   // Prepare ROC curve data
   const rocData = roc_curve.fpr && roc_curve.tpr ? roc_curve.fpr.map((fpr, i) => ({
@@ -46,7 +45,6 @@ export default function PerformanceTab({ data, ticker, tr }) {
 
   // Confusion matrix values
   const { tp, fp, tn, fn } = confusion_matrix || { tp: 0, fp: 0, tn: 0, fn: 0 }
-  const total = tp + fp + tn + fn
 
   return (
     <div className="space-y-6">

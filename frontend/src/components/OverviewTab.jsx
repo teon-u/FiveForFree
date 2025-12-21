@@ -1,4 +1,4 @@
-export default function OverviewTab({ data, ticker, tr }) {
+export default function OverviewTab({ data, tr }) {
   const { prediction, ranking, quick_stats, risk_indicators } = data
   // Use translation if provided, otherwise use default English
   const t = tr || ((key) => key.split('.').pop())
@@ -54,19 +54,6 @@ export default function OverviewTab({ data, ticker, tr }) {
         return 'text-yellow-400 bg-yellow-400/20 border-yellow-400/40'
       default:
         return 'text-red-400 bg-red-400/20 border-red-400/40'
-    }
-  }
-
-  const getGradeLabel = (grade) => {
-    switch (grade) {
-      case 'A':
-        return 'Excellent'
-      case 'B':
-        return 'Good'
-      case 'C':
-        return 'Low Signal'
-      default:
-        return 'Not Practical'
     }
   }
 
