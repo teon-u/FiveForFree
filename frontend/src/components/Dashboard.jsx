@@ -4,10 +4,15 @@ import ModelDetailModal from './ModelDetailModal'
 import ChartModal from './ChartModal'
 import ExportModal from './ExportModal'
 import FilterBar from './filters/FilterBar'
+import DiscoveryBanner from './DiscoveryBanner'
+import DiscoveryPanel from './DiscoveryPanel'
+import NotificationCenter from './NotificationCenter'
+import WatchlistPanel from './WatchlistPanel'
 import { usePredictions } from '../hooks/usePredictions'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useFilterStore } from '../stores/filterStore'
 import { useSortStore } from '../stores/sortStore'
+import { useNotificationStore } from '../stores/notificationStore'
 import { multiSort } from '../utils/sortUtils'
 import { t } from '../i18n'
 
@@ -15,12 +20,18 @@ export default function Dashboard() {
   const [detailModalTicker, setDetailModalTicker] = useState(null)
   const [chartModalTicker, setChartModalTicker] = useState(null)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showDiscoveryPanel, setShowDiscoveryPanel] = useState(false)
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false)
+  const [showWatchlistPanel, setShowWatchlistPanel] = useState(false)
   const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume'
   const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
   const { language } = useSettingsStore()
   const { directions, probabilityRange } = useFilterStore()
   const { getCurrentSortConfigs } = useSortStore()
+  const getUnreadCount = useNotificationStore(state => state.getUnreadCount)
   const tr = t(language)
+
+  const unreadCount = getUnreadCount()
 
   // Filter predictions based on new filter store
   const filterPredictions = useCallback((predictions) => {
@@ -104,6 +115,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Discovery Banner */}
+      <DiscoveryBanner onOpenPanel={() => setShowDiscoveryPanel(true)} />
+
       {/* Filter Bar */}
       <FilterBar />
 
@@ -157,15 +171,41 @@ export default function Dashboard() {
               ({processedPredictions?.length || 0} {tr('dashboard.tickers')})
             </span>
           </h2>
-          {/* Export Button */}
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="px-4 py-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
-            aria-label="Export data"
-          >
-            <span>📥</span>
-            {tr('dashboard.export')}
-          </button>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Notification Button */}
+            <button
+              onClick={() => setShowNotificationCenter(true)}
+              className="relative p-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors"
+              aria-label="Notifications"
+            >
+              <span className="text-lg">🔔</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Watchlist Button */}
+            <button
+              onClick={() => setShowWatchlistPanel(true)}
+              className="p-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors"
+              aria-label="Watchlist"
+            >
+              <span className="text-lg">⭐</span>
+            </button>
+
+            {/* Export Button */}
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="px-4 py-2 bg-surface-light hover:bg-slate-600 text-gray-300 hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              aria-label="Export data"
+            >
+              <span>📥</span>
+              {tr('dashboard.export')}
+            </button>
+          </div>
         </div>
         <TickerGrid
           predictions={processedPredictions}
@@ -197,6 +237,32 @@ export default function Dashboard() {
           predictions={processedPredictions}
           allPredictions={allPredictions}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* Discovery Panel */}
+      {showDiscoveryPanel && (
+        <DiscoveryPanel
+          onClose={() => setShowDiscoveryPanel(false)}
+          onViewDetail={setDetailModalTicker}
+        />
+      )}
+
+      {/* Notification Center */}
+      {showNotificationCenter && (
+        <NotificationCenter
+          onClose={() => setShowNotificationCenter(false)}
+        />
+      )}
+
+      {/* Watchlist Panel */}
+      {showWatchlistPanel && (
+        <WatchlistPanel
+          onClose={() => setShowWatchlistPanel(false)}
+          onViewDetail={(ticker) => {
+            setChartModalTicker(ticker)
+            setShowWatchlistPanel(false)
+          }}
         />
       )}
     </div>
