@@ -51,6 +51,27 @@ export const SORT_PRESETS = {
       { field: 'probability', order: 'desc' }
     ]
   },
+  gradeOnly: {
+    label: { ko: '등급순', en: 'By Grade' },
+    description: { ko: 'A → B → C → D', en: 'A → B → C → D' },
+    configs: [
+      { field: 'grade', order: 'desc' }
+    ]
+  },
+  precisionHighest: {
+    label: { ko: 'Precision 높은순', en: 'Highest Precision' },
+    description: { ko: '적중률이 높은 모델 우선', en: 'High accuracy models first' },
+    configs: [
+      { field: 'precision', order: 'desc' }
+    ]
+  },
+  signalRateHighest: {
+    label: { ko: 'Signal Rate 높은순', en: 'Highest Signal Rate' },
+    description: { ko: '신호 발생률이 높은 순', en: 'High signal rate first' },
+    configs: [
+      { field: 'signalRate', order: 'desc' }
+    ]
+  },
   mostReliable: {
     label: { ko: '신뢰도순', en: 'Most Reliable' },
     description: { ko: 'Precision → Signal', en: 'Precision → Signal' },

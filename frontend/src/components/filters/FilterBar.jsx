@@ -1,8 +1,11 @@
 import DirectionFilter from './DirectionFilter'
 import ProbabilityFilter from './ProbabilityFilter'
+import GradeFilter from './GradeFilter'
+import SectorFilter from './SectorFilter'
 import SortDropdown from './SortDropdown'
 import { useFilterStore } from '../../stores/filterStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { SECTORS } from '../../data/sectors'
 
 const labels = {
   ko: {
@@ -17,7 +20,7 @@ const labels = {
 
 export default function FilterBar() {
   const { language } = useSettingsStore()
-  const { resetFilters, hasActiveFilters, getActiveFilterCount, directions, probabilityPreset } = useFilterStore()
+  const { resetFilters, hasActiveFilters, getActiveFilterCount, directions, probabilityPreset, selectedGrades, selectedSectors } = useFilterStore()
   const tr = labels[language] || labels.ko
 
   const filterCount = getActiveFilterCount()
@@ -34,6 +37,18 @@ export default function FilterBar() {
 
         {/* Probability Filter */}
         <ProbabilityFilter />
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-gray-700" />
+
+        {/* Grade Filter */}
+        <GradeFilter />
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-gray-700" />
+
+        {/* Sector Filter */}
+        <SectorFilter />
 
         {/* Divider */}
         <div className="w-px h-6 bg-gray-700" />
@@ -73,6 +88,19 @@ export default function FilterBar() {
           {probabilityPreset !== 'all' && (
             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
               확률 {probabilityPreset === 'custom' ? '커스텀' : `${probabilityPreset === 'high' ? '70%+' : probabilityPreset === 'veryHigh' ? '80%+' : '90%+'}`}
+            </span>
+          )}
+          {selectedGrades.length > 0 && (
+            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+              등급: {selectedGrades.join(', ')}
+            </span>
+          )}
+          {selectedSectors.length > 0 && (
+            <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full flex items-center gap-1">
+              {selectedSectors.map(s => SECTORS[s]?.icon).join(' ')}
+              {selectedSectors.length === 1
+                ? SECTORS[selectedSectors[0]]?.name[language] || SECTORS[selectedSectors[0]]?.name.ko
+                : `${selectedSectors.length}개 섹터`}
             </span>
           )}
         </div>

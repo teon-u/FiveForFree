@@ -17,8 +17,10 @@ class Settings(BaseSettings):
 
     # Prediction Settings
     PREDICTION_HORIZON_MINUTES: int = 60
-    TARGET_PERCENT: float = 1.0
-    PROBABILITY_THRESHOLD: float = 0.10  # Lowered for rare events (5% moves)
+    TARGET_PERCENT: float = 0.5  # 1.0 → 0.5 (Signal Rate 개선)
+    PROBABILITY_THRESHOLD: float = 0.60  # Raised from 0.10 for better signal quality
+    STOP_LOSS_PERCENT: float = 0.5  # -0.5% stop loss (half of target)
+    SLIPPAGE_PERCENT: float = 0.05  # 0.05% slippage per trade
 
     # Backtesting
     BACKTEST_HOURS: int = 50
@@ -79,6 +81,13 @@ class Settings(BaseSettings):
     # Training Settings
     N_PARALLEL_WORKERS: int = 4
     SEQUENCE_LENGTH: int = 60  # For LSTM/Transformer
+
+    # Signal Rate 개선 설정
+    MAX_CLASS_WEIGHT: float = 15.0  # scale_pos_weight 최대값 (과적합 방지)
+    SIGNAL_THRESHOLD: float = 0.35  # 0.40 → 0.35 (Signal Rate 개선)
+    MIN_PRECISION: float = 0.60  # 최소 요구 Precision
+    MIN_SIGNAL_RATE: float = 0.05  # 0.10 → 0.05 (5%로 하향)
+    AUTO_THRESHOLD_TUNING: bool = True  # 임계값 자동 조정 활성화
 
     # Market Hours (ET)
     MARKET_OPEN_HOUR: int = 9

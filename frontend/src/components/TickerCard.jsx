@@ -124,6 +124,19 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
         </div>
       )}
 
+      {/* High Probability Badge (70%+) */}
+      {probability >= 70 && (
+        <div className={clsx(
+          'high-prob-badge',
+          probability >= 80 ? 'high-prob-badge-extreme' : 'high-prob-badge-high',
+          direction === 'up' ? 'high-prob-badge-up' : 'high-prob-badge-down'
+        )}>
+          <span className="text-xs font-bold">
+            {probability >= 80 ? '🔥 HOT' : '✨ 70%+'}
+          </span>
+        </div>
+      )}
+
       {/* Ticker Symbol */}
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-lg font-bold">{ticker}</h3>

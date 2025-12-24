@@ -5,7 +5,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 export function usePredictions() {
   const { probabilityThreshold } = useSettingsStore()
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['predictions', probabilityThreshold],
     queryFn: async () => {
       const response = await api.get('/predictions', {
@@ -29,6 +29,7 @@ export function usePredictions() {
     isLoading,
     error,
     refetch,
+    lastUpdated: dataUpdatedAt,
   }
 }
 

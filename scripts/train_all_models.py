@@ -178,14 +178,14 @@ def prepare_training_data(
     ticker: str, df: pd.DataFrame
 ) -> Optional[tuple]:
     """
-    Prepare features and labels for training.
+    Prepare features and labels for training (Structure A + B).
 
     Args:
         ticker: Stock ticker symbol
         df: DataFrame with minute bars
 
     Returns:
-        Tuple of (X, y_up, y_down) or None
+        Tuple of (X, y_up, y_down, y_volatility, y_direction) or None
     """
     try:
         logger.info(f"{ticker}: Preparing training data...")
@@ -201,10 +201,12 @@ def prepare_training_data(
         logger.debug(f"{ticker}: Computing features...")
         features_df = feature_engineer.compute_features(df)
 
-        # Generate labels
+        # Generate labels (Structure A + B)
         logger.debug(f"{ticker}: Generating labels...")
         labels_up = []
         labels_down = []
+        labels_volatility = []
+        labels_direction = []
 
         for idx in range(len(df) - settings.PREDICTION_HORIZON_MINUTES - 1):
             entry_time = df.iloc[idx]["timestamp"]
@@ -212,35 +214,52 @@ def prepare_training_data(
 
             labels = label_generator.generate_labels(df, entry_time, entry_price)
 
+            # Structure A labels
             labels_up.append(labels["label_up"])
             labels_down.append(labels["label_down"])
+
+            # Structure B labels
+            labels_volatility.append(labels["label_volatility"])
+            labels_direction.append(labels["label_direction"])
 
         # Align features and labels
         feature_names = feature_engineer.get_feature_names()
         X = features_df[feature_names].values[: len(labels_up)]
         y_up = np.array(labels_up)
         y_down = np.array(labels_down)
+        y_volatility = np.array(labels_volatility)
+        y_direction = np.array(labels_direction)
 
         # Remove any NaN rows
         valid_indices = ~np.isnan(X).any(axis=1)
         X = X[valid_indices]
         y_up = y_up[valid_indices]
         y_down = y_down[valid_indices]
+        y_volatility = y_volatility[valid_indices]
+        y_direction = y_direction[valid_indices]
+
+        # Calculate volatility stats for logging
+        vol_rate = y_volatility.mean() * 100
+        dir_up_rate = y_direction[y_volatility == 1].mean() * 100 if y_volatility.sum() > 0 else 0
 
         logger.info(
             f"{ticker}: Prepared {len(X)} samples with {X.shape[1]} features"
         )
         logger.info(
-            f"{ticker}: Label distribution - Up: {y_up.sum()}/{len(y_up)} "
+            f"{ticker}: Structure A - Up: {y_up.sum()}/{len(y_up)} "
             f"({y_up.mean()*100:.1f}%), Down: {y_down.sum()}/{len(y_down)} "
             f"({y_down.mean()*100:.1f}%)"
+        )
+        logger.info(
+            f"{ticker}: Structure B - Volatility: {y_volatility.sum()}/{len(y_volatility)} "
+            f"({vol_rate:.1f}%), Direction(UP|volatile): {dir_up_rate:.1f}%"
         )
 
         if len(X) < 100:
             logger.warning(f"{ticker}: Insufficient samples ({len(X)})")
             return None
 
-        return X, y_up, y_down
+        return X, y_up, y_down, y_volatility, y_direction
 
     except Exception as e:
         logger.error(f"{ticker}: Failed to prepare training data: {e}")
@@ -281,20 +300,22 @@ def train_ticker_models(
             logger.warning(f"{ticker}: Insufficient data")
             return stats
 
-        # Prepare training data
+        # Prepare training data (Structure A + B)
         training_data = prepare_training_data(ticker, df)
         if training_data is None:
             return stats
 
-        X, y_up, y_down = training_data
+        X, y_up, y_down, y_volatility, y_direction = training_data
         stats["samples"] = len(X)
         stats["features"] = X.shape[1]
 
-        # Train models
-        logger.info(f"{ticker}: Training models...")
+        # Train models (Structure A + B with 2-Stage learning)
+        logger.info(f"{ticker}: Training models (Structure A + B)...")
         start_time = datetime.now()
 
-        results = trainer.train_single_ticker(ticker, X, y_up, y_down)
+        results = trainer.train_single_ticker(
+            ticker, X, y_up, y_down, y_volatility, y_direction
+        )
 
         elapsed = (datetime.now() - start_time).total_seconds()
 

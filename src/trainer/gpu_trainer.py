@@ -212,26 +212,34 @@ class GPUParallelTrainer:
         y_direction: np.ndarray
     ) -> Dict[str, bool]:
         """
-        Train Structure B hybrid models (volatility + direction).
+        Train Structure B hybrid models (volatility + direction) with 2-Stage learning.
+
+        2-Stage Learning:
+        - Stage 1: Volatility model trained on ALL samples
+        - Stage 2: Direction model trained ONLY on volatile samples (volatility=1)
+
+        This approach improves direction prediction by:
+        - Removing noise from non-volatile samples
+        - Learning only from meaningful direction data
+        - Better class balance in direction labels
 
         Args:
             ticker: Stock ticker symbol
             X: Feature matrix
-            y_volatility: Binary labels for volatility (±5% movement)
+            y_volatility: Binary labels for volatility (±1% movement)
             y_direction: Binary labels for direction (1=up, 0=down)
 
         Returns:
             Dictionary mapping model keys to training success status
         """
-        logger.info(f"Training hybrid models (Structure B) for {ticker}")
+        logger.info(f"Training hybrid models (Structure B) for {ticker} with 2-Stage learning")
         results = {}
 
-        # Split data
+        # Split data for volatility (full dataset)
         X_train, X_val, y_vol_train, y_vol_val = self._train_val_split(X, y_volatility)
-        _, _, y_dir_train, y_dir_val = self._train_val_split(X, y_direction)
 
-        # ===== Train Volatility Models =====
-        logger.info(f"Training 'volatility' prediction models for {ticker}")
+        # ===== Stage 1: Train Volatility Models (all samples) =====
+        logger.info(f"[Stage 1] Training 'volatility' models for {ticker} (all samples)")
 
         # Tree models for volatility
         tree_results = self._train_tree_models_parallel(
@@ -245,24 +253,54 @@ class GPUParallelTrainer:
         )
         results.update(neural_results)
 
-        # ===== Train Direction Models =====
-        # Direction model is trained on ALL samples, but predictions are weighted
-        # by volatility probability during inference
-        logger.info(f"Training 'direction' prediction models for {ticker}")
+        # ===== Stage 2: Train Direction Models (volatile samples only) =====
+        # Filter to only volatile samples (where actual direction matters)
+        volatile_mask_train = y_vol_train == 1
+        volatile_mask_val = y_vol_val == 1 if y_vol_val is not None else None
 
-        # Tree models for direction
+        X_train_volatile = X_train[volatile_mask_train]
+        y_dir_train_volatile = y_direction[:len(y_vol_train)][volatile_mask_train]
+
+        # Handle validation set
+        X_val_volatile = None
+        y_dir_val_volatile = None
+        if X_val is not None and volatile_mask_val is not None:
+            X_val_volatile = X_val[volatile_mask_val]
+            y_dir_val_volatile = y_direction[len(y_vol_train):][volatile_mask_val]
+
+        n_volatile_train = len(X_train_volatile)
+        n_volatile_val = len(X_val_volatile) if X_val_volatile is not None else 0
+        volatile_ratio = n_volatile_train / len(X_train) * 100 if len(X_train) > 0 else 0
+
+        logger.info(
+            f"[Stage 2] Training 'direction' models for {ticker} "
+            f"(volatile samples only: {n_volatile_train}/{len(X_train)} train = {volatile_ratio:.1f}%, "
+            f"{n_volatile_val} val)"
+        )
+
+        # Check minimum samples
+        if n_volatile_train < 50:
+            logger.warning(
+                f"Insufficient volatile samples for {ticker}: {n_volatile_train} < 50. "
+                f"Skipping direction model training."
+            )
+            return results
+
+        # Tree models for direction (volatile samples only)
         tree_results = self._train_tree_models_parallel(
-            ticker, "direction", X_train, y_dir_train, X_val, y_dir_val
+            ticker, "direction", X_train_volatile, y_dir_train_volatile,
+            X_val_volatile, y_dir_val_volatile
         )
         results.update(tree_results)
 
-        # Neural models for direction
+        # Neural models for direction (volatile samples only)
         neural_results = self._train_neural_models_sequential(
-            ticker, "direction", X_train, y_dir_train, X_val, y_dir_val
+            ticker, "direction", X_train_volatile, y_dir_train_volatile,
+            X_val_volatile, y_dir_val_volatile
         )
         results.update(neural_results)
 
-        logger.info(f"Hybrid model training completed for {ticker}")
+        logger.info(f"Hybrid model training completed for {ticker} (2-Stage)")
         return results
 
     def train_single_ticker_hybrid(

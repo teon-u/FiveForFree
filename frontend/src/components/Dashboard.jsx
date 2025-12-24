@@ -4,6 +4,7 @@ import ModelDetailModal from './ModelDetailModal'
 import ChartModal from './ChartModal'
 import ExportModal from './ExportModal'
 import FilterBar from './filters/FilterBar'
+import DashboardSummary from './DashboardSummary'
 import DiscoveryBanner from './DiscoveryBanner'
 import DiscoveryPanel from './DiscoveryPanel'
 import NotificationCenter from './NotificationCenter'
@@ -15,6 +16,7 @@ import { useSortStore } from '../stores/sortStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { multiSort } from '../utils/sortUtils'
 import { t } from '../i18n'
+import { TICKER_SECTORS } from '../data/sectors'
 
 export default function Dashboard() {
   const [detailModalTicker, setDetailModalTicker] = useState(null)
@@ -24,14 +26,22 @@ export default function Dashboard() {
   const [showNotificationCenter, setShowNotificationCenter] = useState(false)
   const [showWatchlistPanel, setShowWatchlistPanel] = useState(false)
   const [activeCategory, setActiveCategory] = useState('gainers') // 'gainers' or 'volume'
-  const { volumeTop100, gainersTop100, isLoading, error } = usePredictions()
+  const { volumeTop100, gainersTop100, isLoading, error, lastUpdated } = usePredictions()
   const { language } = useSettingsStore()
-  const { directions, probabilityRange } = useFilterStore()
+  const { directions, probabilityRange, selectedGrades, selectedSectors } = useFilterStore()
   const { getCurrentSortConfigs } = useSortStore()
   const getUnreadCount = useNotificationStore(state => state.getUnreadCount)
   const tr = t(language)
 
   const unreadCount = getUnreadCount()
+
+  // Helper to calculate grade from precision
+  const getGrade = (precision) => {
+    if (precision >= 80) return 'A'
+    if (precision >= 70) return 'B'
+    if (precision >= 60) return 'C'
+    return 'D'
+  }
 
   // Filter predictions based on new filter store
   const filterPredictions = useCallback((predictions) => {
@@ -48,9 +58,26 @@ export default function Dashboard() {
         return false
       }
 
+      // Grade filter
+      if (selectedGrades.length > 0) {
+        const precision = p.precision || p.accuracy || 50 // fallback to 50%
+        const grade = getGrade(precision * 100)
+        if (!selectedGrades.includes(grade)) {
+          return false
+        }
+      }
+
+      // Sector filter
+      if (selectedSectors.length > 0) {
+        const tickerSector = TICKER_SECTORS[p.ticker]
+        if (!tickerSector || !selectedSectors.includes(tickerSector.sector)) {
+          return false
+        }
+      }
+
       return true
     })
-  }, [directions, probabilityRange])
+  }, [directions, probabilityRange, selectedGrades, selectedSectors])
 
   // Apply filters and sorting
   const processedPredictions = useMemo(() => {
@@ -120,6 +147,12 @@ export default function Dashboard() {
 
       {/* Filter Bar */}
       <FilterBar />
+
+      {/* Dashboard Summary Panel */}
+      <DashboardSummary
+        predictions={allPredictions}
+        lastUpdateTime={lastUpdated || Date.now()}
+      />
 
       {/* Category Toggle Button */}
       <div className="flex justify-center">

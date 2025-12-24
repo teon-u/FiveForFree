@@ -3,9 +3,10 @@ Backtest Simulator for NASDAQ Prediction System
 
 Simulates trading based on model predictions using realistic rules:
 - Long Only strategy
-- Entry: up_prob >= threshold (default 70%)
-- Exit: 5% profit OR 60 minutes elapsed
+- Entry: up_prob >= threshold (default 60%)
+- Exit: Target profit OR Stop Loss OR 60 minutes elapsed
 - Commission: 0.2% round-trip
+- Slippage: 0.05% per trade
 
 Tracks individual trades and generates comprehensive results.
 """
@@ -35,12 +36,14 @@ class Trade:
         entry_price: Entry price
         exit_time: When the trade was exited
         exit_price: Exit price
-        exit_reason: 'target_hit' or 'time_limit'
+        exit_reason: 'target_hit', 'stop_loss', or 'time_limit'
         probability: Model's predicted probability at entry
-        profit_pct: Net profit percentage (after commission)
+        profit_pct: Net profit percentage (after commission and slippage)
         duration_minutes: Trade duration in minutes
         model_type: Type of model used for prediction
         target: 'up' or 'down'
+        position_size: Position size in dollars
+        shares: Number of shares traded
     """
     ticker: str
     entry_time: datetime
@@ -53,6 +56,8 @@ class Trade:
     duration_minutes: float
     model_type: Optional[str] = None
     target: str = 'up'
+    position_size: float = 1000.0
+    shares: int = 0
 
     @property
     def is_win(self) -> bool:
@@ -61,8 +66,8 @@ class Trade:
 
     @property
     def profit_dollars(self) -> float:
-        """Calculate dollar profit for $1000 position."""
-        return 1000 * (self.profit_pct / 100)
+        """Calculate dollar profit based on actual position size."""
+        return self.position_size * (self.profit_pct / 100)
 
     def to_dict(self) -> dict:
         """Convert trade to dictionary."""
@@ -79,7 +84,9 @@ class Trade:
             'model_type': self.model_type,
             'target': self.target,
             'is_win': self.is_win,
-            'profit_dollars': self.profit_dollars
+            'profit_dollars': self.profit_dollars,
+            'position_size': self.position_size,
+            'shares': self.shares
         }
 
 
@@ -164,8 +171,9 @@ class BacktestSimulator:
 
     Simulates Long Only trading with the following rules:
     - Entry: When up_prob >= probability_threshold
-    - Exit: 5% profit target OR 60 minutes time limit
+    - Exit: Target profit OR Stop Loss OR 60 minutes time limit
     - Commission: 0.2% round-trip (0.1% entry + 0.1% exit)
+    - Slippage: 0.05% per trade (applied to both entry and exit)
 
     Tracks all trades and integrates with model accuracy tracking.
     """
@@ -176,9 +184,8 @@ class BacktestSimulator:
         target_percent: float = None,
         prediction_horizon_minutes: int = None,
         commission_pct: float = None,
-        slippage_pct: float = 0.05,
-        use_realistic_entry: bool = True,
-        use_close_only: bool = True
+        stop_loss_percent: float = None,
+        slippage_percent: float = None
     ):
         """
         Initialize backtest simulator.
@@ -188,27 +195,23 @@ class BacktestSimulator:
             target_percent: Target profit percentage (default from settings)
             prediction_horizon_minutes: Max time to hold position (default from settings)
             commission_pct: One-way commission percentage (default from settings)
-            slippage_pct: Slippage percentage per trade (default 0.05%)
-            use_realistic_entry: If True, use next bar's open as entry price (default True)
-            use_close_only: If True, use close prices only for exit determination (default True)
+            stop_loss_percent: Stop loss percentage (default from settings)
+            slippage_percent: Slippage percentage per trade (default from settings)
         """
         self.probability_threshold = probability_threshold or settings.PROBABILITY_THRESHOLD
         self.target_percent = target_percent or settings.TARGET_PERCENT
         self.prediction_horizon_minutes = prediction_horizon_minutes or settings.PREDICTION_HORIZON_MINUTES
         self.commission_pct = commission_pct or settings.COMMISSION_PERCENT
-        self.slippage_pct = slippage_pct
-        self.use_realistic_entry = use_realistic_entry
-        self.use_close_only = use_close_only
-
-        # Total transaction cost = commission (round-trip) + slippage (both ways)
         self.commission_round_trip = self.commission_pct * 2
-        self.total_transaction_cost = self.commission_round_trip + (self.slippage_pct * 2)
+        self.stop_loss_percent = stop_loss_percent or getattr(settings, 'STOP_LOSS_PERCENT', 0.5)
+        self.slippage_percent = slippage_percent or getattr(settings, 'SLIPPAGE_PERCENT', 0.05)
+        self.slippage_round_trip = self.slippage_percent * 2
 
         logger.info(
             f"BacktestSimulator initialized: threshold={self.probability_threshold:.1%}, "
-            f"target={self.target_percent}%, horizon={self.prediction_horizon_minutes}min, "
-            f"commission={self.commission_round_trip:.2%}, slippage={self.slippage_pct*2:.2%}, "
-            f"realistic_entry={self.use_realistic_entry}, close_only={self.use_close_only}"
+            f"target={self.target_percent}%, stop_loss={self.stop_loss_percent}%, "
+            f"horizon={self.prediction_horizon_minutes}min, "
+            f"commission={self.commission_round_trip:.2%}, slippage={self.slippage_round_trip:.2%}"
         )
 
     def simulate_trade(
@@ -222,12 +225,12 @@ class BacktestSimulator:
         target: str = 'up'
     ) -> Optional[Trade]:
         """
-        Simulate a single trade.
+        Simulate a single trade with stop loss and slippage.
 
         Args:
             ticker: Stock ticker
             entry_time: Entry timestamp
-            entry_price: Entry price
+            entry_price: Entry price (before slippage)
             minute_bars: DataFrame with minute-level price data
             up_prob: Predicted up probability
             model_type: Type of model used
@@ -239,6 +242,9 @@ class BacktestSimulator:
         # Check if probability meets threshold
         if up_prob < self.probability_threshold:
             return None
+
+        # Apply slippage to entry (worse entry = higher price for long)
+        actual_entry_price = entry_price * (1 + self.slippage_percent / 100)
 
         # Get future bars within prediction horizon
         end_time = entry_time + timedelta(minutes=self.prediction_horizon_minutes)
@@ -263,21 +269,26 @@ class BacktestSimulator:
         # Iterate through each minute to find exit
         for idx, row in future_bars.iterrows():
             timestamp = row['timestamp']
+            high = row['high']
+            low = row['low']
             close = row['close']
 
-            # use_close_only: Only use close prices for exit determination
-            # This eliminates intrabar look-ahead bias
-            if self.use_close_only:
-                price_return = ((close - entry_price) / entry_price) * 100
-            else:
-                # Legacy behavior (uses intrabar high - has look-ahead bias)
-                high = row['high']
-                price_return = ((high - entry_price) / entry_price) * 100
+            # Calculate intrabar returns from actual entry price
+            high_return = ((high - actual_entry_price) / actual_entry_price) * 100
+            low_return = ((low - actual_entry_price) / actual_entry_price) * 100
+
+            # Check stop loss FIRST (assume stop loss hit before target in same bar)
+            if low_return <= -self.stop_loss_percent:
+                # Stop loss hit - exit at stop loss price
+                exit_price = actual_entry_price * (1 - self.stop_loss_percent / 100)
+                exit_time = timestamp
+                exit_reason = 'stop_loss'
+                break
 
             # Check if target was hit
-            if price_return >= self.target_percent:
+            if high_return >= self.target_percent:
                 # Target hit - exit at target price
-                exit_price = entry_price * (1 + self.target_percent / 100)
+                exit_price = actual_entry_price * (1 + self.target_percent / 100)
                 exit_time = timestamp
                 exit_reason = 'target_hit'
                 break
@@ -298,9 +309,17 @@ class BacktestSimulator:
             exit_time = last_bar['timestamp']
             exit_reason = 'time_limit'
 
-        # Calculate profit percentage (net of commission AND slippage)
-        gross_return = ((exit_price - entry_price) / entry_price) * 100
-        net_return = gross_return - self.total_transaction_cost
+        # Apply slippage to exit (worse exit = lower price for sell)
+        # Note: For stop_loss and target_hit, slippage may cause slightly worse execution
+        if exit_reason == 'time_limit':
+            actual_exit_price = exit_price * (1 - self.slippage_percent / 100)
+        else:
+            # For stop_loss/target_hit, slippage is already factored in the limit price
+            actual_exit_price = exit_price * (1 - self.slippage_percent / 100)
+
+        # Calculate profit percentage (net of commission and slippage)
+        gross_return = ((actual_exit_price - actual_entry_price) / actual_entry_price) * 100
+        net_return = gross_return - self.commission_round_trip
 
         # Calculate duration
         duration_minutes = (exit_time - entry_time).total_seconds() / 60
@@ -309,9 +328,9 @@ class BacktestSimulator:
         trade = Trade(
             ticker=ticker,
             entry_time=entry_time,
-            entry_price=entry_price,
+            entry_price=actual_entry_price,
             exit_time=exit_time,
-            exit_price=exit_price,
+            exit_price=actual_exit_price,
             exit_reason=exit_reason,
             probability=up_prob,
             profit_pct=net_return,
@@ -371,23 +390,14 @@ class BacktestSimulator:
             entry_time = pred_row['timestamp']
             probability = pred_row['probability']
 
-            # Get entry price
-            # use_realistic_entry: Use next bar's open price (realistic trading)
-            # This reflects the fact that you can only enter after seeing the signal
-            if self.use_realistic_entry:
-                # Find the bar AFTER entry_time and use its open price
-                next_bars = minute_bars[minute_bars['timestamp'] > entry_time].sort_values('timestamp')
-                if len(next_bars) == 0:
-                    continue  # No future bars available
-                entry_price = next_bars.iloc[0]['open']
+            # Get entry price (close price at prediction time)
+            entry_bars = minute_bars[minute_bars['timestamp'] == entry_time]
+            if len(entry_bars) == 0:
+                # Try to find closest bar
+                closest_idx = (minute_bars['timestamp'] - entry_time).abs().argmin()
+                entry_price = minute_bars.loc[closest_idx, 'close']
             else:
-                # Legacy behavior: use close at signal time (has look-ahead bias)
-                entry_bars = minute_bars[minute_bars['timestamp'] == entry_time]
-                if len(entry_bars) == 0:
-                    closest_idx = (minute_bars['timestamp'] - entry_time).abs().argmin()
-                    entry_price = minute_bars.loc[closest_idx, 'close']
-                else:
-                    entry_price = entry_bars.iloc[0]['close']
+                entry_price = entry_bars.iloc[0]['close']
 
             # Simulate trade
             trade = self.simulate_trade(
@@ -463,19 +473,12 @@ class BacktestSimulator:
         # Simulate each trade
         for entry_idx in entry_indices:
             # Skip if not enough future data
-            # Need +1 more bar for realistic entry (next bar's open)
-            required_bars = self.prediction_horizon_minutes + (1 if self.use_realistic_entry else 0)
-            if entry_idx + required_bars >= len(minute_bars):
+            if entry_idx + self.prediction_horizon_minutes >= len(minute_bars):
                 continue
 
             entry_time = minute_bars.loc[entry_idx, 'timestamp']
+            entry_price = minute_bars.loc[entry_idx, 'close']
             probability = probabilities[entry_idx]
-
-            # use_realistic_entry: Use next bar's open price
-            if self.use_realistic_entry:
-                entry_price = minute_bars.loc[entry_idx + 1, 'open']
-            else:
-                entry_price = minute_bars.loc[entry_idx, 'close']
 
             # Get future bars
             future_start = entry_idx + 1
@@ -514,7 +517,7 @@ class BacktestSimulator:
         """
         Backtest simulation with immediate re-entry after trade exit.
 
-        After a trade exits (target hit or time limit), immediately check
+        After a trade exits (target hit, stop loss, or time limit), immediately check
         the next bar for a new entry signal. This maximizes capital utilization.
 
         Args:
@@ -553,10 +556,7 @@ class BacktestSimulator:
         total_bars = len(minute_bars)
         signals_checked = 0
 
-        # Need extra bar for realistic entry
-        required_buffer = self.prediction_horizon_minutes + (1 if self.use_realistic_entry else 0)
-
-        while current_idx < total_bars - required_buffer:
+        while current_idx < total_bars - self.prediction_horizon_minutes:
             signals_checked += 1
             probability = probabilities[current_idx]
 
@@ -568,12 +568,10 @@ class BacktestSimulator:
 
             # Entry signal found
             entry_time = minute_bars.loc[current_idx, 'timestamp']
+            raw_entry_price = minute_bars.loc[current_idx, 'close']
 
-            # use_realistic_entry: Use next bar's open price
-            if self.use_realistic_entry:
-                entry_price = minute_bars.loc[current_idx + 1, 'open']
-            else:
-                entry_price = minute_bars.loc[current_idx, 'close']
+            # Apply slippage to entry (worse entry = higher price for long)
+            entry_price = raw_entry_price * (1 + self.slippage_percent / 100)
 
             # Simulate trade
             exit_idx = None
@@ -583,18 +581,24 @@ class BacktestSimulator:
             # Check each future bar until exit condition
             for future_idx in range(current_idx + 1, min(current_idx + self.prediction_horizon_minutes + 1, total_bars)):
                 bar = minute_bars.loc[future_idx]
+                high = bar['high']
+                low = bar['low']
                 close = bar['close']
                 timestamp = bar['timestamp']
 
-                # use_close_only: Only use close prices for exit determination
-                if self.use_close_only:
-                    price_return = ((close - entry_price) / entry_price) * 100
-                else:
-                    high = bar['high']
-                    price_return = ((high - entry_price) / entry_price) * 100
+                # Calculate returns from actual entry price
+                high_return = ((high - entry_price) / entry_price) * 100
+                low_return = ((low - entry_price) / entry_price) * 100
+
+                # Check stop loss FIRST (assume stop loss hit before target in same bar)
+                if low_return <= -self.stop_loss_percent:
+                    exit_price = entry_price * (1 - self.stop_loss_percent / 100)
+                    exit_idx = future_idx
+                    exit_reason = 'stop_loss'
+                    break
 
                 # Check if target hit
-                if price_return >= self.target_percent:
+                if high_return >= self.target_percent:
                     exit_price = entry_price * (1 + self.target_percent / 100)
                     exit_idx = future_idx
                     exit_reason = 'target_hit'
@@ -617,9 +621,12 @@ class BacktestSimulator:
 
             exit_time = minute_bars.loc[exit_idx, 'timestamp']
 
-            # Calculate profit (net of commission AND slippage)
-            gross_return = ((exit_price - entry_price) / entry_price) * 100
-            net_return = gross_return - self.total_transaction_cost
+            # Apply slippage to exit (worse exit = lower price for sell)
+            actual_exit_price = exit_price * (1 - self.slippage_percent / 100)
+
+            # Calculate profit (net of commission, slippage already applied)
+            gross_return = ((actual_exit_price - entry_price) / entry_price) * 100
+            net_return = gross_return - self.commission_round_trip
             duration_minutes = (exit_time - entry_time).total_seconds() / 60
 
             # Create trade
@@ -628,7 +635,7 @@ class BacktestSimulator:
                 entry_time=entry_time,
                 entry_price=entry_price,
                 exit_time=exit_time,
-                exit_price=exit_price,
+                exit_price=actual_exit_price,
                 exit_reason=exit_reason,
                 probability=probability,
                 profit_pct=net_return,
@@ -717,6 +724,7 @@ class BacktestSimulator:
         """String representation."""
         return (
             f"BacktestSimulator(threshold={self.probability_threshold:.1%}, "
-            f"target={self.target_percent}%, horizon={self.prediction_horizon_minutes}min, "
-            f"commission={self.commission_round_trip:.2%})"
+            f"target={self.target_percent}%, stop_loss={self.stop_loss_percent}%, "
+            f"horizon={self.prediction_horizon_minutes}min, "
+            f"commission={self.commission_round_trip:.2%}, slippage={self.slippage_round_trip:.2%})"
         )

@@ -61,6 +61,28 @@
     @apply absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/50;
   }
 
+  /* High Probability Badge (70%+) */
+  .high-prob-badge {
+    @apply absolute -top-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-white whitespace-nowrap z-10;
+  }
+
+  .high-prob-badge-high {
+    @apply bg-gradient-to-r from-amber-500 to-orange-500 shadow-md shadow-amber-500/40;
+  }
+
+  .high-prob-badge-extreme {
+    @apply bg-gradient-to-r from-red-500 to-pink-500 shadow-lg shadow-red-500/50;
+    animation: badge-pulse 1.5s ease-in-out infinite;
+  }
+
+  .high-prob-badge-up {
+    @apply ring-1 ring-green-400/50;
+  }
+
+  .high-prob-badge-down {
+    @apply ring-1 ring-red-400/50;
+  }
+
   /* Probability badge */
   .prob-badge {
     @apply px-3 py-1 rounded-full text-sm font-bold;
@@ -225,9 +247,22 @@
   will-change: box-shadow;
 }
 
+/* High probability badge pulse animation */
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.05);
+    box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.6);
+  }
+}
+
 /* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
-  .grade-a-animate {
+  .grade-a-animate,
+  .high-prob-badge-extreme {
     animation: none;
   }
 }

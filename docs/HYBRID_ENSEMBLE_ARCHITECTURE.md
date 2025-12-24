@@ -207,23 +207,31 @@ else:
 ```
 역할: GPU 기반 모델 학습
 추가된 기능:
-- _train_hybrid_models(): Structure B 모델 학습
+- _train_hybrid_models(): Structure B 모델 2-Stage 학습
 - train_single_ticker_hybrid(): 하이브리드 학습 진입점
 - volatility/direction 모델 병렬/순차 학습 지원
 ```
 
-**학습 흐름:**
+**2-Stage 학습 흐름:**
 ```python
-def train_single_ticker(ticker, X, y_up, y_down, y_volatility=None, y_direction=None):
-    # Structure A 학습
-    train_up_models(X, y_up)
-    train_down_models(X, y_down)
+def _train_hybrid_models(ticker, X, y_volatility, y_direction):
+    # ===== Stage 1: Volatility (전체 샘플) =====
+    train_volatility_models(X, y_volatility)
 
-    # Structure B 학습 (레이블 제공 시)
-    if y_volatility is not None and y_direction is not None:
-        train_volatility_models(X, y_volatility)
-        train_direction_models(X, y_direction)
+    # ===== Stage 2: Direction (volatile 샘플만) =====
+    # 변동성이 있는 샘플만 필터링
+    volatile_mask = y_volatility == 1
+    X_volatile = X[volatile_mask]
+    y_dir_volatile = y_direction[volatile_mask]
+
+    # 변동성 있는 샘플만으로 방향 모델 학습
+    train_direction_models(X_volatile, y_dir_volatile)
 ```
+
+**2-Stage 학습의 장점:**
+- 노이즈 제거: 변동성 없는 샘플의 "방향"은 의미 없음
+- 정확도 향상: 실제 ±1% 도달한 케이스만 학습
+- 클래스 균형: volatile 샘플에서 direction은 ~50:50
 
 ### 5.4 src/predictor/realtime_predictor.py
 ```
@@ -448,20 +456,25 @@ hybrid_accuracy = 0.72
 alpha = direct_accuracy / (direct_accuracy + hybrid_accuracy)  # 0.486
 ```
 
-### 10.3 Structure B 개선 - 조건부 학습
+### 10.3 Structure B 개선 - 조건부 학습 ✅ (구현 완료)
 
-현재 Direction 모델은 모든 샘플로 학습합니다.
-변동성 발생 샘플만으로 학습하면 더 정확할 수 있습니다:
+**구현 완료** (2025-12-22): Direction 모델은 이제 volatile 샘플만으로 학습합니다.
 
 ```python
-# 변동성 샘플만 필터링
+# src/trainer/gpu_trainer.py의 _train_hybrid_models()
+# Stage 2: 변동성 샘플만 필터링하여 방향 모델 학습
 volatile_mask = y_volatility == 1
 X_volatile = X[volatile_mask]
 y_direction_volatile = y_direction[volatile_mask]
 
-# 방향 모델 학습
+# 방향 모델 학습 (volatile 샘플만)
 direction_model.fit(X_volatile, y_direction_volatile)
 ```
+
+**기대 효과:**
+- 노이즈 제거로 방향 예측 정확도 향상
+- 의미 있는 데이터만 학습하여 과적합 방지
+- ~50:50 클래스 균형으로 안정적인 학습
 
 ---
 
@@ -662,6 +675,7 @@ print(results)
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
+| 2025-12-22 | 2.1 | 2-Stage 학습 구현 (Direction 모델 volatile 샘플만 학습) |
 | 2025-12-17 | 2.0 | Multi-Strategy Ensemble 추가 |
 | 2025-12-17 | 1.1 | Precision 기반 메트릭으로 변경 (Hit Rate -> Precision) |
 | 2025-12-15 | 1.0 | 하이브리드-앙상블 구조 초기 구현 |

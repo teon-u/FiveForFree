@@ -15,6 +15,9 @@ export const useFilterStore = create(
       probabilityPreset: 'all', // 'all', 'high', 'veryHigh', 'extreme', 'custom'
       probabilityRange: { min: 0, max: 100 },
 
+      // Grade filter (A/B/C/D)
+      selectedGrades: [], // empty = all grades
+
       // Actions
       setDirections: (dirs) => set({ directions: dirs }),
 
@@ -40,6 +43,15 @@ export const useFilterStore = create(
           : [...state.selectedIndustries, industry]
       })),
 
+      // Grade filter actions
+      setGrades: (grades) => set({ selectedGrades: grades }),
+
+      toggleGrade: (grade) => set((state) => ({
+        selectedGrades: state.selectedGrades.includes(grade)
+          ? state.selectedGrades.filter(g => g !== grade)
+          : [...state.selectedGrades, grade]
+      })),
+
       setProbabilityPreset: (preset) => {
         const presets = {
           all: { min: 0, max: 100 },
@@ -63,6 +75,7 @@ export const useFilterStore = create(
         directions: ['up', 'down'],
         selectedSectors: [],
         selectedIndustries: [],
+        selectedGrades: [],
         probabilityPreset: 'all',
         probabilityRange: { min: 0, max: 100 },
       }),
@@ -74,6 +87,7 @@ export const useFilterStore = create(
         if (state.directions.length < 2) count++
         if (state.selectedSectors.length > 0) count++
         if (state.selectedIndustries.length > 0) count++
+        if (state.selectedGrades.length > 0) count++
         if (state.probabilityPreset !== 'all') count++
         return count
       },
@@ -85,6 +99,7 @@ export const useFilterStore = create(
           state.directions.length < 2 ||
           state.selectedSectors.length > 0 ||
           state.selectedIndustries.length > 0 ||
+          state.selectedGrades.length > 0 ||
           state.probabilityPreset !== 'all'
         )
       }

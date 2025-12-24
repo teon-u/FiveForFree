@@ -60,6 +60,15 @@ class XGBoostModel(BaseModel):
         # GPU 사용 여부 결정
         use_gpu = settings.USE_GPU and HAS_CUDA
 
+        # 클래스 가중치 계산 (클래스 불균형 해결)
+        y_array = np.asarray(y)
+        n_pos = (y_array == 1).sum()
+        n_neg = (y_array == 0).sum()
+        scale_pos_weight = min(n_neg / max(n_pos, 1), settings.MAX_CLASS_WEIGHT)
+
+        logger.info(f"XGBoost scale_pos_weight: {scale_pos_weight:.2f} "
+                    f"(pos={n_pos}, neg={n_neg})")
+
         # XGBoost 2.0+: tree_method='hist' + device='cuda' (gpu_hist는 deprecated)
         self._model = xgb.XGBClassifier(
             n_estimators=self.n_estimators,
@@ -68,6 +77,7 @@ class XGBoostModel(BaseModel):
             eval_metric='logloss',
             tree_method='hist',  # hist는 device에 따라 GPU/CPU 자동 선택
             device='cuda' if use_gpu else 'cpu',  # XGBoost 2.0+ GPU device
+            scale_pos_weight=scale_pos_weight,  # 클래스 불균형 가중치
             random_state=42
         )
 

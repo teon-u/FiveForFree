@@ -60,6 +60,15 @@ class LightGBMModel(BaseModel):
         # GPU 사용 시도 (LightGBM GPU 빌드 필요)
         use_gpu = settings.USE_GPU and HAS_CUDA
 
+        # 클래스 가중치 계산 (클래스 불균형 해결)
+        y_array = np.asarray(y)
+        n_pos = (y_array == 1).sum()
+        n_neg = (y_array == 0).sum()
+        scale_pos_weight = min(n_neg / max(n_pos, 1), settings.MAX_CLASS_WEIGHT)
+
+        logger.info(f"LightGBM scale_pos_weight: {scale_pos_weight:.2f} "
+                    f"(pos={n_pos}, neg={n_neg})")
+
         # GPU 파라미터 설정 (LightGBM 4.0+)
         gpu_params = {}
         if use_gpu:
@@ -74,6 +83,7 @@ class LightGBMModel(BaseModel):
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
                 learning_rate=self.learning_rate,
+                scale_pos_weight=scale_pos_weight,  # 클래스 불균형 가중치
                 random_state=42,
                 verbose=-1,
                 **gpu_params
@@ -103,6 +113,7 @@ class LightGBMModel(BaseModel):
                     n_estimators=self.n_estimators,
                     max_depth=self.max_depth,
                     learning_rate=self.learning_rate,
+                    scale_pos_weight=scale_pos_weight,  # 클래스 불균형 가중치
                     random_state=42,
                     verbose=-1
                 )
