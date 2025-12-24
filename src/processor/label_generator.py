@@ -42,7 +42,9 @@ class LabelGenerator:
         self,
         target_percent: float = 1.0,
         prediction_horizon_minutes: int = 60,
-        commission_pct: float = 0.1
+        commission_pct: float = 0.1,
+        use_realistic_entry: bool = True,
+        use_close_only: bool = True
     ):
         """
         Initialize label generator.
@@ -51,10 +53,15 @@ class LabelGenerator:
             target_percent: Target profit/loss percentage (default 1.0)
             prediction_horizon_minutes: Time horizon for prediction (default 60)
             commission_pct: Trading commission per trade (default 0.1%)
+            use_realistic_entry: If True, use next bar's open as entry price (default True)
+            use_close_only: If True, use close prices only instead of high/low (default True)
+                           This eliminates intrabar look-ahead bias
         """
         self.target_percent = target_percent
         self.prediction_horizon_minutes = prediction_horizon_minutes
         self.commission_pct = commission_pct
+        self.use_realistic_entry = use_realistic_entry
+        self.use_close_only = use_close_only
 
     def generate_labels(
         self,
@@ -94,8 +101,15 @@ class LabelGenerator:
             return self._create_default_labels()
 
         # Calculate gain/loss percentages
-        future_bars['gain_pct'] = ((future_bars['high'] - entry_price) / entry_price) * 100
-        future_bars['loss_pct'] = ((future_bars['low'] - entry_price) / entry_price) * 100
+        # use_close_only=True: Use close prices only to eliminate intrabar look-ahead bias
+        # In real trading, you can't know the intrabar high/low until the bar closes
+        if self.use_close_only:
+            future_bars['gain_pct'] = ((future_bars['close'] - entry_price) / entry_price) * 100
+            future_bars['loss_pct'] = ((future_bars['close'] - entry_price) / entry_price) * 100
+        else:
+            # Legacy behavior (has look-ahead bias)
+            future_bars['gain_pct'] = ((future_bars['high'] - entry_price) / entry_price) * 100
+            future_bars['loss_pct'] = ((future_bars['low'] - entry_price) / entry_price) * 100
 
         # Account for commission (both entry and exit)
         commission_total = self.commission_pct * 2  # Round-trip commission
@@ -199,9 +213,18 @@ class LabelGenerator:
         # Generate labels for each valid entry point
         labels_list = []
 
-        for idx in range(lookback_minutes, len(minute_bars)):
+        # If use_realistic_entry, we need to leave room for next bar
+        end_idx = len(minute_bars) - 1 if self.use_realistic_entry else len(minute_bars)
+
+        for idx in range(lookback_minutes, end_idx):
             entry_time = minute_bars.loc[idx, 'timestamp']
-            entry_price = minute_bars.loc[idx, 'close']
+
+            # use_realistic_entry: Use next bar's open as entry price
+            # This reflects real trading where you can only enter after seeing the signal
+            if self.use_realistic_entry and idx + 1 < len(minute_bars):
+                entry_price = minute_bars.loc[idx + 1, 'open']
+            else:
+                entry_price = minute_bars.loc[idx, 'close']
 
             # Generate labels
             labels = self.generate_labels(minute_bars, entry_time, entry_price)
@@ -255,20 +278,33 @@ class LabelGenerator:
         horizon = self.prediction_horizon_minutes
         commission_total = self.commission_pct * 2
 
+        # Determine end index based on realistic entry setting
+        # If use_realistic_entry, we need next bar's open, so stop 1 bar earlier
+        end_range = len(df) - horizon - (1 if self.use_realistic_entry else 0)
+
         # Use rolling window with reverse indexing
-        for i in range(len(df) - horizon):
-            entry_price = df.loc[i, 'close']
+        for i in range(end_range):
+            # use_realistic_entry: Use next bar's open as entry price
+            if self.use_realistic_entry and i + 1 < len(df):
+                entry_price = df.loc[i + 1, 'open']
+            else:
+                entry_price = df.loc[i, 'close']
 
-            # Get future bars
-            future_highs = df.loc[i+1:i+horizon, 'high'].values
-            future_lows = df.loc[i+1:i+horizon, 'low'].values
-
-            if len(future_highs) == 0:
-                continue
-
-            # Calculate max gain and loss
-            max_high = np.max(future_highs)
-            min_low = np.min(future_lows)
+            # Get future bars - use close only if use_close_only is True
+            if self.use_close_only:
+                future_prices = df.loc[i+1:i+horizon, 'close'].values
+                if len(future_prices) == 0:
+                    continue
+                max_high = np.max(future_prices)
+                min_low = np.min(future_prices)
+            else:
+                # Legacy behavior (has look-ahead bias)
+                future_highs = df.loc[i+1:i+horizon, 'high'].values
+                future_lows = df.loc[i+1:i+horizon, 'low'].values
+                if len(future_highs) == 0:
+                    continue
+                max_high = np.max(future_highs)
+                min_low = np.min(future_lows)
 
             max_gain = ((max_high - entry_price) / entry_price) * 100
             max_loss = ((min_low - entry_price) / entry_price) * 100
@@ -296,7 +332,10 @@ class LabelGenerator:
 
             if label_up == 1:
                 # Find first bar where gain exceeds target
-                gains = ((df.loc[i+1:i+horizon, 'high'].values - entry_price) / entry_price) * 100 - commission_total
+                if self.use_close_only:
+                    gains = ((df.loc[i+1:i+horizon, 'close'].values - entry_price) / entry_price) * 100 - commission_total
+                else:
+                    gains = ((df.loc[i+1:i+horizon, 'high'].values - entry_price) / entry_price) * 100 - commission_total
                 up_indices = np.where(gains >= self.target_percent)[0]
                 if len(up_indices) > 0:
                     minutes_to_up = up_indices[0] + 1
@@ -304,7 +343,10 @@ class LabelGenerator:
 
             if label_down == 1:
                 # Find first bar where loss exceeds target
-                losses = ((df.loc[i+1:i+horizon, 'low'].values - entry_price) / entry_price) * 100 + commission_total
+                if self.use_close_only:
+                    losses = ((df.loc[i+1:i+horizon, 'close'].values - entry_price) / entry_price) * 100 + commission_total
+                else:
+                    losses = ((df.loc[i+1:i+horizon, 'low'].values - entry_price) / entry_price) * 100 + commission_total
                 down_indices = np.where(losses <= -self.target_percent)[0]
                 if len(down_indices) > 0:
                     minutes_to_down = down_indices[0] + 1

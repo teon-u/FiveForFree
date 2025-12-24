@@ -497,7 +497,20 @@ class FeatureEngineer:
             df['price_vs_vwap'] = (df['close'] - df['vwap']) / df['vwap']
         else:
             # Calculate VWAP if not provided
-            df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+            # IMPORTANT: VWAP should be calculated per-day to avoid cumulative bias
+            if 'timestamp' in df.columns:
+                df['_date'] = pd.to_datetime(df['timestamp']).dt.date
+                # Calculate per-day cumulative values
+                df['_cum_vol_price'] = df.groupby('_date').apply(
+                    lambda x: (x['close'] * x['volume']).cumsum()
+                ).reset_index(level=0, drop=True)
+                df['_cum_vol'] = df.groupby('_date')['volume'].cumsum()
+                df['vwap'] = df['_cum_vol_price'] / df['_cum_vol']
+                # Clean up temp columns
+                df.drop(columns=['_date', '_cum_vol_price', '_cum_vol'], inplace=True)
+            else:
+                # Fallback to simple cumsum if no timestamp
+                df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
             df['price_vs_vwap'] = (df['close'] - df['vwap']) / df['vwap']
 
         # 14-15: Price momentum (rate of change of returns)
@@ -588,8 +601,11 @@ class FeatureEngineer:
         df['volume_trend'] = (df['volume_ma_5'] - df['volume_ma_15']) / (df['volume_ma_15'] + 1e-10)
 
         # 5: On-Balance Volume
+        # Use ratio-based OBV to avoid cumulative scale bias between train/val
         df['obv'] = _obv(close, volume)
-        df['obv_normalized'] = df['obv'] / df['obv'].rolling(60).mean()
+        # OBV change ratio over 20 bars (more stable than absolute cumsum)
+        obv_ma_20 = df['obv'].rolling(20).mean()
+        df['obv_normalized'] = (df['obv'] - obv_ma_20) / (obv_ma_20.abs() + 1e-10)
 
         # 6: Money flow (price * volume)
         df['money_flow'] = df['close'] * df['volume']
@@ -600,7 +616,10 @@ class FeatureEngineer:
 
         # 8: Volume Price Trend
         df['volume_price_trend'] = (df['close'].diff() / df['close'].shift(1)) * df['volume']
-        df['vpt_cumsum'] = df['volume_price_trend'].cumsum()
+        # Use rolling sum instead of global cumsum to avoid scale bias
+        # 20-bar rolling sum captures recent VPT momentum without cumulative drift
+        vpt_rolling = df['volume_price_trend'].rolling(20).sum()
+        df['vpt_cumsum'] = vpt_rolling / (vpt_rolling.abs().rolling(60).mean() + 1e-10)
 
         return df
 

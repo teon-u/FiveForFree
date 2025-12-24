@@ -55,9 +55,35 @@
 
 ---
 
+## ✅ Bias 수정 작업 (12/24 완료)
+
+> 예측 정확도에 직접 영향을 미치는 핵심 수정
+
+### 🔴 P0: Label Intrabar Bias 수정 ✅
+- [x] `label_generator.py` - high/low 대신 close 사용
+- [x] Entry price를 다음봉 open으로 변경
+- **영향**: 성공률 10~15% 과대평가 해소
+
+### 🔴 P0: 백테스트 Entry Price 수정 ✅
+- [x] `simulator.py` - 진입가를 다음봉 시가로 변경
+- [x] 슬리피지 0.05% 추가
+- **영향**: 수익률 0.2~0.5% 과대평가 해소
+
+### 🟠 P1: Cumulative Feature 일별 Reset ✅
+- [x] `feature_engineer.py` - VWAP 일별 reset
+- [x] OBV ratio로 변환 (절대값 → 변화율)
+- [x] VPT rolling sum으로 변환
+- **영향**: Sign-flip 피처 문제 해결
+
+### 🟡 P2: 모델 학습 개선 ✅
+- [x] Early Stopping 구현 (LSTM/Transformer)
+- [ ] 확률 캘리브레이션 적용 (보류)
+
+---
+
 ## 📋 사전 준비 체크리스트 (12/24 오늘)
 
-### 필수
+### 필수 (Bias 수정 후)
 - [ ] 시스템 전체 기동 테스트
 - [ ] 최신 데이터 수집 (`python scripts/collect_historical.py`)
 - [ ] 모델 재학습 (`python scripts/train_all_models.py`)

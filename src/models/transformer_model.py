@@ -103,6 +103,8 @@ class TransformerModel(BaseModel):
         epochs: int = 50,
         batch_size: int = None,  # None이면 settings에서 가져옴
         sequence_length: int = 60,
+        early_stopping_patience: int = 5,
+        min_delta: float = 0.001,
         **kwargs
     ):
         """
@@ -119,6 +121,8 @@ class TransformerModel(BaseModel):
             epochs: Training epochs
             batch_size: Batch size
             sequence_length: Input sequence length
+            early_stopping_patience: Epochs to wait before early stop
+            min_delta: Minimum change to qualify as improvement
         """
         super().__init__(ticker=ticker, target=target, model_type='transformer')
 
@@ -130,11 +134,14 @@ class TransformerModel(BaseModel):
         self.epochs = epochs
         self.batch_size = batch_size if batch_size is not None else settings.TRANSFORMER_BATCH_SIZE
         self.sequence_length = sequence_length
+        self.early_stopping_patience = early_stopping_patience
+        self.min_delta = min_delta
 
         self._model: Optional[TransformerClassifier] = None
         self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if HAS_TORCH else None
         self.input_size: Optional[int] = None  # Set during training, used for loading
         self._scaler: Optional[StandardScaler] = None  # Feature scaler for normalization
+        self._best_val_loss: float = float('inf')  # Track best validation loss
 
     def _prepare_sequences(self, X, y=None):
         """Prepare sequences for Transformer."""
@@ -155,7 +162,7 @@ class TransformerModel(BaseModel):
         return X_seq
 
     def train(self, X, y, X_val=None, y_val=None):
-        """Train the Transformer model."""
+        """Train the Transformer model with early stopping."""
         if not HAS_TORCH:
             raise ImportError("PyTorch is not installed")
 
@@ -168,6 +175,18 @@ class TransformerModel(BaseModel):
 
         # Prepare sequences with scaled data
         X_seq, y_seq = self._prepare_sequences(X_scaled, y)
+
+        # Prepare validation data if provided
+        val_loader = None
+        if X_val is not None and y_val is not None:
+            X_val = np.nan_to_num(X_val, nan=0.0, posinf=1e6, neginf=-1e6)
+            X_val_scaled = self._scaler.transform(X_val)
+            X_val_seq, y_val_seq = self._prepare_sequences(X_val_scaled, y_val)
+            val_dataset = TensorDataset(
+                torch.FloatTensor(X_val_seq),
+                torch.FloatTensor(y_val_seq)
+            )
+            val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
         # Initialize model
         self.input_size = X_seq.shape[2]
@@ -202,9 +221,15 @@ class TransformerModel(BaseModel):
         # Mixed Precision (AMP) for RTX GPU optimization
         scaler = GradScaler(enabled=use_cuda)
 
-        # Training loop with AMP
+        # Early stopping variables
+        best_val_loss = float('inf')
+        best_model_state = None
+        patience_counter = 0
+
+        # Training loop with AMP and early stopping
         self._model.train()
         for epoch in range(self.epochs):
+            epoch_loss = 0.0
             for batch_X, batch_y in dataloader:
                 # 비동기 전송으로 오버랩
                 batch_X = batch_X.to(self._device, non_blocking=True)
@@ -217,6 +242,8 @@ class TransformerModel(BaseModel):
                     outputs = self._model(batch_X)
                     loss = criterion(outputs, batch_y)
 
+                epoch_loss += loss.item()
+
                 # Scaled backward pass
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
@@ -224,6 +251,36 @@ class TransformerModel(BaseModel):
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), max_norm=1.0)
                 scaler.step(optimizer)
                 scaler.update()
+
+            # Validation and early stopping
+            if val_loader is not None:
+                self._model.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for batch_X, batch_y in val_loader:
+                        batch_X = batch_X.to(self._device)
+                        batch_y = batch_y.to(self._device)
+                        with autocast(enabled=use_cuda):
+                            outputs = self._model(batch_X)
+                            val_loss += criterion(outputs, batch_y).item()
+                val_loss /= len(val_loader)
+                self._model.train()
+
+                # Check for improvement
+                if val_loss < best_val_loss - self.min_delta:
+                    best_val_loss = val_loss
+                    best_model_state = {k: v.cpu().clone() for k, v in self._model.state_dict().items()}
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    if patience_counter >= self.early_stopping_patience:
+                        logger.info(f"Early stopping at epoch {epoch+1}/{self.epochs} (val_loss: {val_loss:.4f})")
+                        break
+
+        # Restore best model if early stopping was used
+        if best_model_state is not None:
+            self._model.load_state_dict({k: v.to(self._device) for k, v in best_model_state.items()})
+            self._best_val_loss = best_val_loss
 
         self.is_trained = True
         self._update_last_trained()
