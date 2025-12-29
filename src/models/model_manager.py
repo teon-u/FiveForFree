@@ -259,7 +259,8 @@ class ModelManager:
         """
         Get the best performing model for a ticker and target.
 
-        Based on 50-hour hit rate performance.
+        Applies minimum criteria (precision threshold, sample count).
+        Falls back to best available if no model meets criteria.
 
         Args:
             ticker: Ticker symbol
@@ -276,24 +277,46 @@ class ModelManager:
         if ticker not in self._models:
             raise ValueError(f"No models found for ticker {ticker}")
 
-        best_model = None
-        best_model_type = None
-        best_hit_rate = -1.0
+        # Collect all candidates with their metrics
+        candidates = []  # [(model_type, model, hit_rate, sample_count)]
 
         for model_type, targets in self._models[ticker].items():
             if target in targets:
                 model = targets[target]
                 if model.is_trained:
                     hit_rate = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
-                    if hit_rate > best_hit_rate:
-                        best_hit_rate = hit_rate
-                        best_model = model
-                        best_model_type = model_type
+                    sample_count = len([p for p in model.prediction_history if p.get('actual_outcome') is not None])
+                    candidates.append((model_type, model, hit_rate, sample_count))
 
-        if best_model is None:
+        if not candidates:
             raise ValueError(f"No trained models found for {ticker} {target}")
 
-        return best_model_type, best_model
+        # Filter by minimum criteria
+        min_precision = settings.MIN_PRECISION_THRESHOLD
+        min_samples = settings.MIN_PREDICTION_SAMPLES
+
+        qualified = [
+            (mt, m, hr, sc) for mt, m, hr, sc in candidates
+            if hr >= min_precision and sc >= min_samples
+        ]
+
+        if qualified:
+            # Select best from qualified models
+            best = max(qualified, key=lambda x: x[2])
+            return best[0], best[1]
+        else:
+            # No model meets criteria - fallback to best available with warning
+            best = max(candidates, key=lambda x: x[2])
+            best_model_type, best_model, best_hit_rate, best_samples = best
+
+            logger.warning(
+                f"[{ticker}/{target}] No model meets criteria "
+                f"(min_precision={min_precision:.0%}, min_samples={min_samples}). "
+                f"Using fallback: {best_model_type} "
+                f"(hit_rate={best_hit_rate:.1%}, samples={best_samples})"
+            )
+
+            return best_model_type, best_model
 
     def get_all_models(self, ticker: str, target: str) -> Dict[str, BaseModel]:
         """

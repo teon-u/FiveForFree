@@ -15,6 +15,7 @@ import numpy as np
 from loguru import logger
 
 from src.models.base_model import BaseModel
+from config.settings import settings
 
 if TYPE_CHECKING:
     from src.models.model_manager import ModelManager
@@ -171,6 +172,41 @@ class EnsembleModel(BaseModel):
 
         return weights
 
+    def _select_best_model(self) -> Optional[str]:
+        """
+        Select best model applying minimum criteria.
+
+        Uses settings.MIN_PRECISION_THRESHOLD as filter.
+        Falls back to highest precision model with warning if no model qualifies.
+
+        Returns:
+            Best model type name, or None if no models available
+        """
+        if not self._base_model_precisions:
+            return None
+
+        min_threshold = settings.MIN_PRECISION_THRESHOLD
+
+        # Filter models meeting minimum precision
+        qualified = {
+            mt: prec for mt, prec in self._base_model_precisions.items()
+            if prec >= min_threshold
+        }
+
+        if qualified:
+            # Select best from qualified
+            best = max(qualified.items(), key=lambda x: x[1])
+            return best[0]
+        else:
+            # Fallback with warning
+            best = max(self._base_model_precisions.items(), key=lambda x: x[1])
+            logger.warning(
+                f"Ensemble [{self.ticker}/{self.target}]: "
+                f"No model meets min_precision={min_threshold:.0%}. "
+                f"Fallback to {best[0]} (precision={best[1]:.1%})"
+            )
+            return best[0]
+
     def train(self, X, y, X_val=None, y_val=None):
         """
         Train the ensemble model.
@@ -223,13 +259,11 @@ class EnsembleModel(BaseModel):
         self._precision_weights = self._calculate_precision_weights()
         logger.info(f"Precision weights: {self._precision_weights}")
 
-        # 2. Find best model for dynamic selection
-        if self._base_model_precisions:
-            self._best_model = max(
-                self._base_model_precisions.items(),
-                key=lambda x: x[1]
-            )[0]
-            logger.info(f"Best model (by precision): {self._best_model}")
+        # 2. Find best model for dynamic selection (with minimum criteria)
+        self._best_model = self._select_best_model()
+        if self._best_model:
+            best_prec = self._base_model_precisions.get(self._best_model, 0)
+            logger.info(f"Best model: {self._best_model} (precision={best_prec:.1%})")
 
         # 3. Train stacking meta-learner
         X_meta = np.column_stack(base_predictions)
@@ -492,12 +526,8 @@ class EnsembleModel(BaseModel):
             # Recalculate weights
             self._precision_weights = self._calculate_precision_weights()
 
-            # Update best model for dynamic selection
-            if self._base_model_precisions:
-                self._best_model = max(
-                    self._base_model_precisions.items(),
-                    key=lambda x: x[1]
-                )[0]
+            # Update best model for dynamic selection (with minimum criteria)
+            self._best_model = self._select_best_model()
 
             # Check if weights changed
             weights_changed = (old_weights != self._precision_weights) or (old_best != self._best_model)

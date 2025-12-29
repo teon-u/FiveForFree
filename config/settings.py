@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     PREDICTION_TARGETS: list[str] = ["up", "down"]
     DEFAULT_TICKERS: list[str] = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
 
+    # Model Selection Criteria
+    MIN_PRECISION_THRESHOLD: float = 0.30  # 최소 precision (30% = 3:1 R/R 손익분기)
+    MIN_PREDICTION_SAMPLES: int = 10  # 최소 예측 샘플 수
+    FALLBACK_WHEN_NO_QUALIFIED: bool = True  # 기준 미달시 가장 높은 모델 사용 (경고 로그)
+
     # Hybrid-Ensemble Settings (Structure B)
     HYBRID_TARGETS: list[str] = ["volatility", "direction"]  # Structure B targets
     USE_HYBRID_ENSEMBLE: bool = True  # Enable hybrid-ensemble approach
