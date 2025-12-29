@@ -264,7 +264,7 @@ export default function EnsembleTab({ data, tr }) {
                 <div className="flex items-center justify-between">
                   <span className="text-gray-300">Ensemble:</span>
                   <span className="text-xl font-bold text-purple-400">
-                    {current_agreement.ensemble_prediction.direction.toUpperCase()} ({(current_agreement.ensemble_prediction.probability * 100).toFixed(0)}%)
+                    {current_agreement.meta_learner_prediction?.direction?.toUpperCase() || 'N/A'} ({((current_agreement.meta_learner_prediction?.probability || 0) * 100).toFixed(0)}%)
                   </span>
                 </div>
               </div>
@@ -274,12 +274,12 @@ export default function EnsembleTab({ data, tr }) {
                   <div key={pred.model} className="flex items-center justify-between py-2 border-b border-surface-lighter/50">
                     <span className="text-gray-300">{formatModelName(pred.model)}:</span>
                     <span className={`font-semibold ${
-                      pred.direction === current_agreement.ensemble_prediction.direction
+                      pred.direction === current_agreement.meta_learner_prediction?.direction
                         ? 'text-green-400'
                         : 'text-red-400'
                     }`}>
                       {pred.direction.toUpperCase()} ({(pred.probability * 100).toFixed(0)}%)
-                      {pred.direction === current_agreement.ensemble_prediction.direction ? ' ✓' : ' ✗'}
+                      {pred.direction === current_agreement.meta_learner_prediction?.direction ? ' ✓' : ' ✗'}
                     </span>
                   </div>
                 ))}

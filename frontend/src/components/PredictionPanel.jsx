@@ -97,7 +97,7 @@ export default function PredictionPanel({ ticker, onClose }) {
                 <div>
                   <div className="text-sm text-gray-400">Precision (50h)</div>
                   <div className="text-lg font-semibold text-gray-300">
-                    {best_prediction.hit_rate.toFixed(1)}%
+                    {best_prediction.hit_rate === 0 ? '수집 중' : `${best_prediction.hit_rate.toFixed(1)}%`}
                   </div>
                 </div>
               </div>

@@ -200,8 +200,8 @@ def main():
     print(f"  Tickers processed: {successful_tickers}/{len(tickers)}")
     print(f"  Total predictions recorded: {total_predictions}")
 
-    # Save models with updated prediction_history
-    print("\nSaving models with prediction history...")
+    # Cache performance stats and save models
+    print("\nCaching performance stats and saving models...")
     for ticker in tickers:
         if ticker not in model_manager._models:
             continue
@@ -209,13 +209,15 @@ def main():
             for target in model_manager._models[ticker][model_type]:
                 model = model_manager._models[ticker][model_type][target]
                 if len(model.prediction_history) > 0:
+                    # Cache stats before saving (so they persist after server restart)
+                    model.cache_performance_stats()
                     model_manager.save_model(ticker, model_type, target, model)
 
-    print("Done! Models saved with prediction history.")
+    print("Done! Models saved with cached performance stats.")
 
-    # Show sample hit rates
+    # Show sample performance stats (using cached stats)
     print("\n" + "=" * 60)
-    print("SAMPLE HIT RATES")
+    print("SAMPLE PERFORMANCE STATS (cached)")
     print("=" * 60)
 
     sample_tickers = tickers[:5]
@@ -227,9 +229,12 @@ def main():
                 continue
             if 'up' in model_manager._models[ticker][model_type]:
                 model = model_manager._models[ticker][model_type]['up']
-                accuracy = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
-                history_len = len(model.prediction_history)
-                print(f"  {ticker} {model_type} up: {accuracy*100:.1f}% hit rate ({history_len} predictions)")
+                stats = model.get_prediction_stats(hours=settings.BACKTEST_HOURS)
+                precision = stats['precision'] * 100
+                signal_rate = stats['signal_rate'] * 100
+                grade = stats['practicality_grade']
+                cached = "(cached)" if stats.get('is_cached') else "(live)"
+                print(f"  {ticker} {model_type} up: {precision:.1f}% precision, {signal_rate:.1f}% signal, Grade {grade} {cached}")
 
 
 if __name__ == "__main__":

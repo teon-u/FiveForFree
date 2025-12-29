@@ -426,6 +426,170 @@ class NASDAQScheduler:
             logger.error(f"Daily retraining job failed: {e}")
             self.job_stats[job_name]["errors"] += 1
 
+    def job_keep_alive(self) -> None:
+        """
+        Keep-alive job to prevent Windows from terminating idle process.
+
+        Runs every 30 seconds to maintain process activity.
+        This prevents Windows from marking the process as unresponsive
+        and terminating it during long idle periods between scheduled jobs.
+        """
+        job_name = "keep_alive"
+        self.job_stats[job_name] = self.job_stats.get(job_name, {"runs": 0, "errors": 0, "last_run": None})
+        self.job_stats[job_name]["runs"] += 1
+        self.job_stats[job_name]["last_run"] = datetime.now(ET)
+        # Debug level to avoid log spam
+        logger.debug("Keep-alive ping")
+
+    def job_auto_train_new_tickers(self) -> None:
+        """
+        Hourly job: Auto-train new market gainers.
+
+        Runs every hour to:
+        1. Discover new market gainers
+        2. Collect data for tickers without data
+        3. Train models for tickers with data but no models
+
+        Limited to 3 tickers per cycle to avoid overloading.
+        """
+        job_name = "auto_train"
+        self.job_stats[job_name] = self.job_stats.get(job_name, {"runs": 0, "errors": 0, "last_run": None, "trained": 0})
+
+        try:
+            self.job_stats[job_name]["runs"] += 1
+            self.job_stats[job_name]["last_run"] = datetime.now(ET)
+
+            logger.info("=" * 80)
+            logger.info("HOURLY JOB: Auto-Train New Tickers")
+            logger.info("=" * 80)
+
+            import pandas as pd
+            import numpy as np
+
+            # Get trained tickers from model_manager
+            trained_tickers = set(self.model_manager.get_tickers())
+
+            # Get tickers with data from DB
+            with get_db() as db:
+                from sqlalchemy import select
+                stmt = select(DBMinuteBar.symbol).distinct()
+                tickers_with_data = set(s.upper() for s in db.execute(stmt).scalars().all())
+
+            # Get current market gainers
+            gainers = self.ticker_selector.get_market_top_gainers(limit=20)
+
+            if not gainers:
+                logger.info("No market gainers found")
+                return
+
+            # Find tickers that need training (have data but no model)
+            tickers_need_training = []
+            for g in gainers:
+                ticker_upper = g.ticker.upper()
+                if ticker_upper in tickers_with_data and ticker_upper not in trained_tickers:
+                    tickers_need_training.append(g.ticker)
+
+            if not tickers_need_training:
+                logger.info("All gainers already have trained models or lack data")
+                return
+
+            # Limit to 3 tickers per cycle
+            MAX_PER_CYCLE = 3
+            tickers_to_train = tickers_need_training[:MAX_PER_CYCLE]
+
+            logger.info(f"Found {len(tickers_need_training)} tickers needing training, "
+                       f"processing {len(tickers_to_train)}: {', '.join(tickers_to_train)}")
+
+            trained_count = 0
+            for ticker in tickers_to_train:
+                try:
+                    logger.info(f"Auto-training {ticker}...")
+
+                    # Load last 30 days of data
+                    cutoff_date = datetime.now() - timedelta(days=30)
+
+                    with get_db() as db:
+                        from sqlalchemy import select
+
+                        stmt = (
+                            select(DBMinuteBar)
+                            .where(DBMinuteBar.symbol == ticker.upper())
+                            .where(DBMinuteBar.timestamp >= cutoff_date)
+                            .order_by(DBMinuteBar.timestamp)
+                        )
+                        bars = db.execute(stmt).scalars().all()
+
+                        if len(bars) < 1000:
+                            logger.warning(f"{ticker}: Insufficient data ({len(bars)} bars)")
+                            continue
+
+                        # Convert to DataFrame
+                        df = pd.DataFrame([{
+                            "timestamp": bar.timestamp,
+                            "open": bar.open,
+                            "high": bar.high,
+                            "low": bar.low,
+                            "close": bar.close,
+                            "volume": bar.volume,
+                            "vwap": bar.vwap,
+                        } for bar in bars])
+
+                    # Compute features
+                    features_df = self.feature_engineer.compute_features(df)
+                    feature_names = self.feature_engineer.get_feature_names()
+
+                    # Generate labels
+                    labels_up = []
+                    labels_down = []
+
+                    for idx in range(len(df) - settings.PREDICTION_HORIZON_MINUTES - 1):
+                        entry_time = df.iloc[idx]["timestamp"]
+                        entry_price = df.iloc[idx]["close"]
+                        labels = self.label_generator.generate_labels(df, entry_time, entry_price)
+                        labels_up.append(labels["label_up"])
+                        labels_down.append(labels["label_down"])
+
+                    # Prepare arrays
+                    X = features_df[feature_names].values[:len(labels_up)]
+                    y_up = np.array(labels_up)
+                    y_down = np.array(labels_down)
+
+                    # Remove NaN rows
+                    valid_indices = ~np.isnan(X).any(axis=1)
+                    X = X[valid_indices]
+                    y_up = y_up[valid_indices]
+                    y_down = y_down[valid_indices]
+
+                    if len(X) < 100:
+                        logger.warning(f"{ticker}: Too few valid samples ({len(X)})")
+                        continue
+
+                    # Train models
+                    results = self.gpu_trainer.train_single_ticker(ticker, X, y_up, y_down)
+
+                    models_success = sum(1 for v in results.values() if v)
+                    logger.info(f"{ticker}: {models_success}/{len(results)} models trained")
+
+                    if models_success > 0:
+                        trained_count += 1
+                        # Update model_manager's ticker list
+                        if ticker.upper() not in self.model_manager._tickers:
+                            self.model_manager._tickers.append(ticker.upper())
+
+                    # Clear GPU memory
+                    self.gpu_trainer.clear_gpu_memory()
+
+                except Exception as e:
+                    logger.error(f"{ticker}: Auto-training failed: {e}")
+                    continue
+
+            self.job_stats[job_name]["trained"] += trained_count
+            logger.info(f"Auto-train complete: {trained_count} tickers trained this cycle")
+
+        except Exception as e:
+            logger.error(f"Auto-train job failed: {e}")
+            self.job_stats[job_name]["errors"] += 1
+
     # ========== SCHEDULER MANAGEMENT ==========
 
     def start(self) -> None:
@@ -488,6 +652,28 @@ class NASDAQScheduler:
             coalesce=True,
         )
         logger.info("✓ Scheduled: Daily retraining at 5:00 PM ET")
+
+        # Job 5: Keep-alive - Prevent Windows from terminating idle process
+        self.scheduler.add_job(
+            self.job_keep_alive,
+            trigger=IntervalTrigger(seconds=30, timezone=ET),
+            id="keep_alive",
+            name="Process Keep-Alive",
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("✓ Scheduled: Keep-alive ping every 30 seconds")
+
+        # Job 6: Auto-train new tickers - Train models for new market gainers
+        self.scheduler.add_job(
+            self.job_auto_train_new_tickers,
+            trigger=IntervalTrigger(hours=1, timezone=ET),
+            id="auto_train",
+            name="Auto-Train New Tickers",
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("✓ Scheduled: Auto-train new tickers every hour")
 
         # Initialize ticker list immediately
         logger.info("\nInitializing ticker list...")

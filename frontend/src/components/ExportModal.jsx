@@ -7,19 +7,26 @@ import {
   prepareExportData,
   validateExportOptions
 } from '../utils/exportUtils'
+import { t } from '../i18n'
+import { useSettingsStore } from '../stores/settingsStore'
 
-const FORMATS = [
-  { key: 'csv', label: 'CSV', icon: '📄', description: 'Universal format' },
-  { key: 'xlsx', label: 'Excel', icon: '📊', description: 'With formatting' },
-  { key: 'json', label: 'JSON', icon: '{ }', description: 'For developers' }
+const getFormats = (tr) => [
+  { key: 'csv', label: 'CSV', icon: '📄', description: tr('export.formats.csv') },
+  { key: 'xlsx', label: 'Excel', icon: '📊', description: tr('export.formats.xlsx') },
+  { key: 'json', label: 'JSON', icon: '{ }', description: tr('export.formats.json') }
 ]
 
-const RANGES = [
-  { key: 'current', label: 'Current View', description: 'Filtered results' },
-  { key: 'all', label: 'All Data', description: 'All predictions' }
+const getRanges = (tr) => [
+  { key: 'current', label: tr('export.ranges.current'), description: tr('export.ranges.currentDesc') },
+  { key: 'all', label: tr('export.ranges.all'), description: tr('export.ranges.allDesc') }
 ]
 
 export default function ExportModal({ predictions, allPredictions, onClose }) {
+  const language = useSettingsStore((state) => state.language)
+  const tr = t(language)
+  const FORMATS = getFormats(tr)
+  const RANGES = getRanges(tr)
+
   const [format, setFormat] = useState('csv')
   const [range, setRange] = useState('current')
   const [includeBasic, setIncludeBasic] = useState(true)
@@ -119,14 +126,14 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
         {isExporting ? (
           /* Progress View */
           <div className="text-center py-8">
-            <div className="text-lg font-bold mb-4">Preparing download...</div>
+            <div className="text-lg font-bold mb-4">{tr('export.preparing')}</div>
             <div className="w-full bg-surface-light rounded-full h-2.5 mb-3">
               <div
                 className="bg-blue-500 h-2.5 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <div className="text-sm text-gray-400">{progress}% complete</div>
+            <div className="text-sm text-gray-400">{progress}% {tr('export.complete')}</div>
           </div>
         ) : (
           <>
@@ -134,7 +141,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
             <div className="flex items-center justify-between mb-5">
               <h2 id="export-modal-title" className="text-xl font-bold flex items-center gap-2">
                 <span className="text-2xl">📥</span>
-                Export Data
+                {tr('export.title')}
               </h2>
               <button
                 onClick={onClose}
@@ -155,7 +162,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
             {/* File Format */}
             <div className="mb-5">
               <div className="text-sm font-semibold text-gray-300 mb-2">
-                File Format
+                {tr('export.fileFormat')}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {FORMATS.map((f) => (
@@ -179,7 +186,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
             {/* Data Range */}
             <div className="mb-5">
               <div className="text-sm font-semibold text-gray-300 mb-2">
-                Data Range
+                {tr('export.dataRange')}
               </div>
               <div className="space-y-2">
                 {RANGES.map((r) => {
@@ -204,7 +211,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                       <div className="flex-1">
                         <span className="font-medium">{r.label}</span>
                         <span className="text-gray-400 text-sm ml-2">
-                          ({count} items)
+                          ({count}{tr('export.items')})
                         </span>
                       </div>
                     </label>
@@ -216,7 +223,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
             {/* Include Options */}
             <div className="mb-5">
               <div className="text-sm font-semibold text-gray-300 mb-2">
-                Include Fields
+                {tr('export.includeFields')}
               </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-3 p-2 rounded hover:bg-surface-light cursor-pointer transition-colors">
@@ -227,9 +234,9 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                     className="accent-blue-500 w-4 h-4"
                   />
                   <div>
-                    <span>Basic Info</span>
+                    <span>{tr('export.fields.basic')}</span>
                     <span className="text-gray-500 text-sm ml-2">
-                      (Ticker, Price, Change)
+                      {tr('export.fields.basicDesc')}
                     </span>
                   </div>
                 </label>
@@ -241,9 +248,9 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                     className="accent-blue-500 w-4 h-4"
                   />
                   <div>
-                    <span>Prediction</span>
+                    <span>{tr('export.fields.prediction')}</span>
                     <span className="text-gray-500 text-sm ml-2">
-                      (Probability, Direction, Grade)
+                      {tr('export.fields.predictionDesc')}
                     </span>
                   </div>
                 </label>
@@ -255,9 +262,9 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                     className="accent-blue-500 w-4 h-4"
                   />
                   <div>
-                    <span>Model Stats</span>
+                    <span>{tr('export.fields.model')}</span>
                     <span className="text-gray-500 text-sm ml-2">
-                      (Precision, Signal Rate)
+                      {tr('export.fields.modelDesc')}
                     </span>
                   </div>
                 </label>
@@ -269,9 +276,9 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                     className="accent-blue-500 w-4 h-4"
                   />
                   <div>
-                    <span>Detailed Models</span>
+                    <span>{tr('export.fields.detailed')}</span>
                     <span className="text-gray-600 text-sm ml-2">
-                      (XGB, LGBM, LSTM, Transformer)
+                      {tr('export.fields.detailedDesc')}
                     </span>
                   </div>
                 </label>
@@ -281,7 +288,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
             {/* Filename */}
             <div className="mb-6">
               <div className="text-sm font-semibold text-gray-300 mb-2">
-                Filename
+                {tr('export.filename')}
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -289,7 +296,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   className="flex-1 px-4 py-2 bg-surface-light rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter filename"
+                  placeholder={tr('export.filenamePlaceholder')}
                 />
                 <span className="text-gray-500">.{format}</span>
               </div>
@@ -301,7 +308,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                 onClick={onClose}
                 className="flex-1 px-4 py-2.5 bg-surface-light text-gray-400 rounded-lg hover:bg-slate-600 transition-colors font-medium"
               >
-                Cancel
+                {tr('export.cancel')}
               </button>
               <button
                 onClick={handleExport}
@@ -314,7 +321,7 @@ export default function ExportModal({ predictions, allPredictions, onClose }) {
                 )}
               >
                 <span>📥</span>
-                Download
+                {tr('export.download')}
               </button>
             </div>
           </>

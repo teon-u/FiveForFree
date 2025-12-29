@@ -27,7 +27,7 @@ export default function FilterBar() {
   const showReset = hasActiveFilters()
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-3">
+    <div className="relative z-30 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-3">
       <div className="flex flex-wrap items-center gap-3">
         {/* Direction Filter */}
         <DirectionFilter />

@@ -14,6 +14,8 @@ from src.api.routes import (
     tickers_router,
     models_router,
     health_router,
+    performance_router,
+    backtest_router,
 )
 from src.api.routes.status import router as status_router
 from src.api.routes.prices import router as prices_router
@@ -170,6 +172,8 @@ app.include_router(tickers_router)
 app.include_router(models_router)
 app.include_router(status_router)
 app.include_router(prices_router)
+app.include_router(performance_router)
+app.include_router(backtest_router)
 
 
 # Root endpoint
@@ -193,6 +197,7 @@ async def root() -> JSONResponse:
                 "models": "/api/models",
                 "status": "/api/status",
                 "prices": "/api/prices",
+                "performance": "/api/performance",
                 "websocket": "/ws",
                 "docs": "/docs",
                 "redoc": "/redoc",
@@ -237,11 +242,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
     """Handle 404 Not Found errors."""
+    # Preserve original detail message from HTTPException if available
+    message = getattr(exc, 'detail', 'The requested resource was not found')
     return JSONResponse(
         status_code=404,
         content={
             "error": "Not Found",
-            "message": "The requested resource was not found",
+            "message": message,
             "path": str(request.url),
         },
     )

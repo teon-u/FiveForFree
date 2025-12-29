@@ -3,8 +3,42 @@
 @tailwind utilities;
 
 @layer base {
+  /* Dark mode (default) */
   body {
-    @apply bg-background text-white antialiased;
+    @apply bg-background text-white antialiased transition-colors duration-200;
+  }
+
+  /* Light mode */
+  body.light {
+    @apply bg-background-light text-gray-900;
+  }
+
+  .light .bg-surface {
+    @apply bg-surface-white;
+  }
+
+  .light .bg-surface-light {
+    @apply bg-surface-gray;
+  }
+
+  .light .bg-background {
+    @apply bg-background-light;
+  }
+
+  .light .text-white {
+    @apply text-gray-900;
+  }
+
+  .light .text-gray-400 {
+    @apply text-gray-600;
+  }
+
+  .light .text-gray-300 {
+    @apply text-gray-700;
+  }
+
+  .light .border-surface-light {
+    @apply border-gray-200;
   }
 }
 

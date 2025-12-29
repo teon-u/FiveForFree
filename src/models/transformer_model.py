@@ -284,7 +284,21 @@ class TransformerModel(BaseModel):
 
         self.is_trained = True
         self._update_last_trained()
-        logger.info(f"Transformer model trained for {self.ticker} {self.target}")
+
+        # Calculate and store train accuracy using validation set
+        try:
+            if X_val is not None and y_val is not None:
+                y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
+                y_val_arr = np.asarray(y_val)
+                # Handle sequence length mismatch
+                min_len = min(len(y_pred), len(y_val_arr))
+                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_val_arr[:min_len]))
+                logger.info(f"Transformer model trained for {self.ticker} {self.target} (val_acc={self.train_accuracy:.2%})")
+            else:
+                logger.info(f"Transformer model trained for {self.ticker} {self.target}")
+        except Exception as e:
+            logger.warning(f"Could not calculate train_accuracy for Transformer {self.ticker} {self.target}: {e}")
+            logger.info(f"Transformer model trained for {self.ticker} {self.target}")
 
     def predict_proba(self, X) -> np.ndarray:
         """Predict probabilities."""

@@ -10,7 +10,7 @@ from loguru import logger
 from src.api.dependencies import get_realtime_predictor, get_settings
 from src.predictor.realtime_predictor import RealtimePredictor
 from src.collector.ticker_selector import TickerSelector
-from config.settings import Settings
+from config.settings import Settings, settings
 
 
 router = APIRouter(
@@ -436,7 +436,8 @@ async def get_categorized_predictions(
                 best_model = result.best_down_model
                 hit_rate = result.down_model_accuracy
 
-            # Get signal_rate and practicality_grade from model performance
+            # Get signal_rate, precision and practicality_grade from model performance
+            # Use model_manager.get_model_performances() for consistency with model detail view
             signal_rate = 0.0
             practicality_grade = "D"
             try:
@@ -444,22 +445,32 @@ async def get_categorized_predictions(
                 if direction in performances and best_model in performances[direction]:
                     model_perf = performances[direction][best_model]
                     signal_rate = model_perf.get('signal_rate', 0.0)
-                    # Use precision from model_perf for consistency
+                    # Use precision from model_perf for consistency with model detail view
+                    # This ensures same value is shown in dashboard and detail modal
                     precision = model_perf.get('precision', 0.0)
-                    # Recalculate grade based on actual precision and signal_rate
-                    # to ensure consistency (A: prec>=50% & sig>=10%, B: prec>=30% & sig>=10%, C: prec>=30%, D: else)
-                    if precision >= 0.50 and signal_rate >= 0.10:
-                        practicality_grade = 'A'
-                    elif precision >= 0.30 and signal_rate >= 0.10:
-                        practicality_grade = 'B'
-                    elif precision >= 0.30:
-                        practicality_grade = 'C'
-                    else:
-                        practicality_grade = 'D'
-                    # Also update hit_rate to match precision from same source
-                    hit_rate = precision
+                    practicality_grade = model_perf.get('practicality_grade', 'D')
+                    # Update hit_rate only if precision > 0 (avoid overwriting with empty data)
+                    # This fixes the "수집 중" bug where valid accuracy was replaced with 0
+                    if precision > 0:
+                        hit_rate = precision
             except Exception:
-                pass  # Use defaults if unable to get performance data
+                # On error, use same source: model's precision from get_prediction_stats
+                # This ensures consistency even when model_manager fails
+                try:
+                    if direction == "up":
+                        model = model_manager.get_best_model(result.ticker, "up")[1]
+                    else:
+                        model = model_manager.get_best_model(result.ticker, "down")[1]
+                    if model:
+                        stats = model.get_prediction_stats(hours=settings.BACKTEST_HOURS)
+                        precision = stats.get('precision', 0.0)
+                        # Only update hit_rate if precision > 0
+                        if precision > 0:
+                            hit_rate = precision
+                        signal_rate = stats.get('signal_rate', 0.0)
+                        practicality_grade = stats.get('practicality_grade', 'D')
+                except Exception:
+                    pass  # Keep initial values if all else fails
 
             return SimplePrediction(
                 ticker=result.ticker,

@@ -45,10 +45,16 @@ class BaseModel(ABC):
         # Track predictions and outcomes for accuracy calculation
         self.prediction_history: list[dict] = []
 
+        # Cached performance stats (persisted for server restart)
+        # These are used when prediction_history is empty or stale
+        self.cached_stats: Optional[dict] = None
+        self.cached_stats_updated_at: Optional[datetime] = None
+
         # Model metadata
         self.created_at = datetime.now()
         self.last_trained_at: Optional[datetime] = None
         self.training_samples: int = 0
+        self.train_accuracy: float = 0.0  # Training accuracy as fallback for precision
 
     @abstractmethod
     def train(self, X: np.ndarray, y: np.ndarray,
@@ -208,10 +214,11 @@ class BaseModel(ABC):
             threshold: Probability threshold for positive prediction
 
         Returns:
-            Precision as a float between 0 and 1, or 0 if no positive predictions
+            Precision as a float between 0 and 1, or train_accuracy as fallback
         """
+        # Use train_accuracy as fallback when no prediction history
         if not self.prediction_history:
-            return 0.0
+            return self.train_accuracy
 
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
@@ -220,8 +227,9 @@ class BaseModel(ABC):
             if pred['timestamp'] >= cutoff_time and pred['actual_outcome'] is not None
         ]
 
+        # Use train_accuracy as fallback when no recent predictions
         if not recent:
-            return 0.0
+            return self.train_accuracy
 
         # Count predictions where model predicted positive (prob >= threshold)
         true_positives = 0
@@ -313,9 +321,49 @@ class BaseModel(ABC):
             'actual_positive_count': actual_positives
         }
 
+    def cache_performance_stats(self) -> None:
+        """
+        Cache current performance stats for persistence across server restarts.
+
+        This should be called after backtest or when prediction_history has been updated.
+        The cached stats will be used when prediction_history is empty or stale.
+        """
+        # Calculate stats from current prediction_history
+        stats = self._calculate_prediction_stats_internal()
+
+        if stats['total_predictions'] > 0:
+            self.cached_stats = stats
+            self.cached_stats_updated_at = datetime.now()
+            logger.debug(f"Cached stats for {self.ticker}/{self.target}: precision={stats['precision']:.2%}")
+
     def get_prediction_stats(self, hours: int = 50) -> dict[str, Any]:
         """
         Get detailed statistics about recent predictions.
+
+        Uses cached stats when prediction_history is empty or stale.
+
+        Args:
+            hours: Number of hours to look back
+
+        Returns:
+            Dictionary with statistics
+        """
+        # First try to get stats from recent predictions
+        stats = self._calculate_prediction_stats_internal(hours)
+
+        # If no recent predictions, use cached stats
+        if stats['total_predictions'] == 0 and self.cached_stats is not None:
+            # Return cached stats with a flag indicating they are cached
+            cached = self.cached_stats.copy()
+            cached['is_cached'] = True
+            cached['cached_at'] = self.cached_stats_updated_at.isoformat() if self.cached_stats_updated_at else None
+            return cached
+
+        return stats
+
+    def _calculate_prediction_stats_internal(self, hours: int = 50) -> dict[str, Any]:
+        """
+        Internal method to calculate prediction stats from prediction_history.
 
         Args:
             hours: Number of hours to look back
@@ -344,7 +392,8 @@ class BaseModel(ABC):
                 'signal_rate': 0.0,
                 'signal_count': 0,
                 'practicality_grade': 'D',
-                'bias_warning': None
+                'bias_warning': None,
+                'is_cached': False
             }
 
         # Calculate confusion matrix using configurable threshold
@@ -399,7 +448,8 @@ class BaseModel(ABC):
             'signal_rate': signal_rate,
             'signal_count': signals,
             'practicality_grade': practicality_grade,
-            'bias_warning': bias_warning
+            'bias_warning': bias_warning,
+            'is_cached': False
         }
 
     def cleanup_old_predictions(self, days: int = 7) -> None:
