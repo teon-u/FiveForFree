@@ -321,8 +321,25 @@ class LSTMModel(BaseModel):
     def load(self, path: Path):
         """Load model from disk."""
         super().load(path)
+
         pt_path = path.with_suffix('.pt')
-        if pt_path.exists() and HAS_TORCH:
+        scaler_path = path.with_suffix('.scaler')
+
+        # Check if required files exist
+        if not pt_path.exists():
+            logger.warning(f"LSTM [{self.ticker}/{self.target}]: .pt file not found at {pt_path}")
+            self.is_trained = False
+            self._model = None
+            return
+
+        if not HAS_TORCH:
+            logger.warning(f"LSTM [{self.ticker}/{self.target}]: PyTorch not available, cannot load model")
+            self.is_trained = False
+            self._model = None
+            return
+
+        # Try to load .pt file
+        try:
             checkpoint = torch.load(pt_path, map_location=self._device)
 
             # Handle both old format (just state_dict) and new format (dict with input_size)
@@ -342,9 +359,28 @@ class LSTMModel(BaseModel):
                 dropout=self.dropout
             ).to(self._device)
             self._model.load_state_dict(state_dict)
+            logger.debug(f"LSTM [{self.ticker}/{self.target}]: Successfully loaded .pt file")
 
-        # Load scaler
-        scaler_path = path.with_suffix('.scaler')
+        except Exception as e:
+            logger.error(f"LSTM [{self.ticker}/{self.target}]: Failed to load .pt file: {e}")
+            self.is_trained = False
+            self._model = None
+            return
+
+        # Try to load scaler
         if scaler_path.exists():
-            with open(scaler_path, 'rb') as f:
-                self._scaler = pickle.load(f)
+            try:
+                with open(scaler_path, 'rb') as f:
+                    self._scaler = pickle.load(f)
+                logger.debug(f"LSTM [{self.ticker}/{self.target}]: Successfully loaded scaler")
+            except Exception as e:
+                logger.error(f"LSTM [{self.ticker}/{self.target}]: Failed to load scaler: {e}")
+                self.is_trained = False
+                self._model = None
+                self._scaler = None
+                return
+        else:
+            logger.warning(f"LSTM [{self.ticker}/{self.target}]: Scaler file not found at {scaler_path}")
+            self.is_trained = False
+            self._model = None
+            self._scaler = None
