@@ -8,12 +8,22 @@ export default function SettingsPanel({ onClose }) {
     probabilityThreshold,
     filterMode,
     language,
+    theme,
     setProbabilityThreshold,
     setFilterMode,
     setLanguage,
+    setTheme,
   } = useSettingsStore()
 
   const tr = t(language)
+
+  // Local state for slider to prevent page flickering during drag
+  const [localThreshold, setLocalThreshold] = useState(probabilityThreshold)
+
+  // Sync local state when global state changes
+  useEffect(() => {
+    setLocalThreshold(probabilityThreshold)
+  }, [probabilityThreshold])
 
   // System status state
   const [systemStatus, setSystemStatus] = useState(null)
@@ -99,6 +109,51 @@ export default function SettingsPanel({ onClose }) {
             </div>
           </div>
 
+          {/* Theme Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-2">
+              {tr('settings.theme')}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setTheme('dark')}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  theme === 'dark'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-surface-light text-gray-400 hover:bg-slate-600'
+                }`}
+              >
+                <span>🌙</span>
+                {tr('settings.themeDark')}
+              </button>
+              <button
+                onClick={() => setTheme('light')}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  theme === 'light'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-surface-light text-gray-400 hover:bg-slate-600'
+                }`}
+              >
+                <span>☀️</span>
+                {tr('settings.themeLight')}
+              </button>
+              <button
+                onClick={() => setTheme('system')}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  theme === 'system'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-surface-light text-gray-400 hover:bg-slate-600'
+                }`}
+              >
+                <span>💻</span>
+                {tr('settings.themeSystem')}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {language === 'ko' ? '시스템 설정은 운영체제의 테마를 따릅니다' : 'System follows your OS theme preference'}
+            </p>
+          </div>
+
           {/* Divider */}
           <div className="border-t border-surface-light" />
 
@@ -112,13 +167,15 @@ export default function SettingsPanel({ onClose }) {
                 type="range"
                 min="0"
                 max="90"
-                step="5"
-                value={probabilityThreshold}
-                onChange={(e) => setProbabilityThreshold(parseInt(e.target.value))}
+                step="1"
+                value={localThreshold}
+                onChange={(e) => setLocalThreshold(parseInt(e.target.value))}
+                onMouseUp={(e) => setProbabilityThreshold(parseInt(e.target.value))}
+                onTouchEnd={(e) => setProbabilityThreshold(localThreshold)}
                 className="flex-1 h-2 bg-surface-light rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
               <div className="w-20 px-3 py-2 bg-surface-light rounded-lg text-center font-semibold">
-                {probabilityThreshold}%
+                {localThreshold}%
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">

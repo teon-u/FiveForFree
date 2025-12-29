@@ -21,8 +21,50 @@ import pandas as pd
 from loguru import logger
 
 from config.settings import settings
+import pytz
 
 warnings.filterwarnings('ignore')
+
+
+def is_market_hours(timestamp: datetime) -> bool:
+    """
+    Check if given timestamp is within US market hours (9:30 AM - 4:00 PM ET).
+
+    Args:
+        timestamp: Datetime to check (can be naive or timezone-aware)
+
+    Returns:
+        True if within market hours, False otherwise
+    """
+    # Convert to Eastern Time if timezone-aware, or assume naive is ET
+    eastern = pytz.timezone('US/Eastern')
+
+    if timestamp.tzinfo is None:
+        # Naive datetime - assume it's already in Eastern Time
+        et_time = timestamp
+    else:
+        # Convert to Eastern Time
+        et_time = timestamp.astimezone(eastern)
+
+    # Check weekday (Monday=0, Friday=4)
+    if et_time.weekday() > 4:
+        return False
+
+    # Check time range
+    market_open = et_time.replace(
+        hour=settings.MARKET_OPEN_HOUR,
+        minute=settings.MARKET_OPEN_MINUTE,
+        second=0,
+        microsecond=0
+    )
+    market_close = et_time.replace(
+        hour=settings.MARKET_CLOSE_HOUR,
+        minute=settings.MARKET_CLOSE_MINUTE,
+        second=0,
+        microsecond=0
+    )
+
+    return market_open <= et_time < market_close
 
 
 @dataclass
@@ -70,23 +112,23 @@ class Trade:
         return self.position_size * (self.profit_pct / 100)
 
     def to_dict(self) -> dict:
-        """Convert trade to dictionary."""
+        """Convert trade to dictionary with native Python types."""
         return {
-            'ticker': self.ticker,
+            'ticker': str(self.ticker),
             'entry_time': self.entry_time,
-            'entry_price': self.entry_price,
+            'entry_price': float(self.entry_price),
             'exit_time': self.exit_time,
-            'exit_price': self.exit_price,
-            'exit_reason': self.exit_reason,
-            'probability': self.probability,
-            'profit_pct': self.profit_pct,
-            'duration_minutes': self.duration_minutes,
-            'model_type': self.model_type,
-            'target': self.target,
-            'is_win': self.is_win,
-            'profit_dollars': self.profit_dollars,
-            'position_size': self.position_size,
-            'shares': self.shares
+            'exit_price': float(self.exit_price),
+            'exit_reason': str(self.exit_reason),
+            'probability': float(self.probability),
+            'profit_pct': float(self.profit_pct),
+            'duration_minutes': float(self.duration_minutes),
+            'model_type': str(self.model_type) if self.model_type else None,
+            'target': str(self.target),
+            'is_win': bool(self.is_win),
+            'profit_dollars': float(self.profit_dollars),
+            'position_size': float(self.position_size),
+            'shares': int(self.shares)
         }
 
 
@@ -185,7 +227,8 @@ class BacktestSimulator:
         prediction_horizon_minutes: int = None,
         commission_pct: float = None,
         stop_loss_percent: float = None,
-        slippage_percent: float = None
+        slippage_percent: float = None,
+        market_hours_only: bool = False
     ):
         """
         Initialize backtest simulator.
@@ -197,6 +240,7 @@ class BacktestSimulator:
             commission_pct: One-way commission percentage (default from settings)
             stop_loss_percent: Stop loss percentage (default from settings)
             slippage_percent: Slippage percentage per trade (default from settings)
+            market_hours_only: If True, only trade during market hours (9:30-16:00 ET)
         """
         self.probability_threshold = probability_threshold or settings.PROBABILITY_THRESHOLD
         self.target_percent = target_percent or settings.TARGET_PERCENT
@@ -206,12 +250,14 @@ class BacktestSimulator:
         self.stop_loss_percent = stop_loss_percent or getattr(settings, 'STOP_LOSS_PERCENT', 0.5)
         self.slippage_percent = slippage_percent or getattr(settings, 'SLIPPAGE_PERCENT', 0.05)
         self.slippage_round_trip = self.slippage_percent * 2
+        self.market_hours_only = market_hours_only
 
         logger.info(
             f"BacktestSimulator initialized: threshold={self.probability_threshold:.1%}, "
             f"target={self.target_percent}%, stop_loss={self.stop_loss_percent}%, "
             f"horizon={self.prediction_horizon_minutes}min, "
-            f"commission={self.commission_round_trip:.2%}, slippage={self.slippage_round_trip:.2%}"
+            f"commission={self.commission_round_trip:.2%}, slippage={self.slippage_round_trip:.2%}, "
+            f"market_hours_only={self.market_hours_only}"
         )
 
     def simulate_trade(
@@ -239,6 +285,10 @@ class BacktestSimulator:
         Returns:
             Trade object if trade was taken, None if no trade
         """
+        # Check if within market hours (9:30 AM - 4:00 PM ET)
+        if not is_market_hours(entry_time):
+            return None
+
         # Check if probability meets threshold
         if up_prob < self.probability_threshold:
             return None
@@ -300,6 +350,14 @@ class BacktestSimulator:
                 exit_price = close
                 exit_time = timestamp
                 exit_reason = 'time_limit'
+                break
+
+            # Check if market is about to close (force exit before 4:00 PM)
+            if not is_market_hours(timestamp):
+                # Market closed - exit at close price
+                exit_price = close
+                exit_time = timestamp
+                exit_reason = 'market_close'
                 break
 
         # If loop completed without exit, use last bar
@@ -556,9 +614,22 @@ class BacktestSimulator:
         total_bars = len(minute_bars)
         signals_checked = 0
 
+        # Drawdown tracking
+        cumulative_pnl = 0.0
+        peak_pnl = 0.0
+        max_drawdown = 0.0
+        max_drawdown_limit = getattr(settings, 'MAX_DRAWDOWN_PERCENT', 20.0)
+        trading_halted = False
+
         while current_idx < total_bars - self.prediction_horizon_minutes:
             signals_checked += 1
             probability = probabilities[current_idx]
+            entry_time = minute_bars.loc[current_idx, 'timestamp']
+
+            # Check if within market hours (9:30 AM - 4:00 PM ET) - only if enabled
+            if self.market_hours_only and not is_market_hours(entry_time):
+                current_idx += 1
+                continue
 
             # Check if probability meets threshold
             if probability < self.probability_threshold:
@@ -566,8 +637,12 @@ class BacktestSimulator:
                 current_idx += 1
                 continue
 
+            # Check if trading is halted due to max drawdown
+            if trading_halted:
+                current_idx += 1
+                continue
+
             # Entry signal found
-            entry_time = minute_bars.loc[current_idx, 'timestamp']
             raw_entry_price = minute_bars.loc[current_idx, 'close']
 
             # Apply slippage to entry (worse entry = higher price for long)
@@ -612,6 +687,13 @@ class BacktestSimulator:
                     exit_reason = 'time_limit'
                     break
 
+                # Check if market is about to close (force exit before 4:00 PM)
+                if not is_market_hours(timestamp):
+                    exit_price = close
+                    exit_idx = future_idx
+                    exit_reason = 'market_close'
+                    break
+
             # If no exit found in loop, use last available bar
             if exit_idx is None:
                 last_idx = min(current_idx + self.prediction_horizon_minutes, total_bars - 1)
@@ -645,12 +727,35 @@ class BacktestSimulator:
             )
             result.add_trade(trade)
 
+            # Update cumulative P&L and drawdown tracking
+            cumulative_pnl += net_return
+            if cumulative_pnl > peak_pnl:
+                peak_pnl = cumulative_pnl
+            current_drawdown = peak_pnl - cumulative_pnl
+            if current_drawdown > max_drawdown:
+                max_drawdown = current_drawdown
+
+            # Check if max drawdown exceeded
+            if current_drawdown >= max_drawdown_limit:
+                trading_halted = True
+                logger.warning(
+                    f"Trading halted for {ticker}: Max drawdown {current_drawdown:.2f}% "
+                    f"exceeded limit {max_drawdown_limit:.1f}%"
+                )
+
             # IMMEDIATE RE-ENTRY: Move to the bar right after exit
             current_idx = exit_idx + 1
 
+        # Add drawdown info to metadata
+        result.metadata['cumulative_pnl'] = cumulative_pnl
+        result.metadata['peak_pnl'] = peak_pnl
+        result.metadata['max_drawdown'] = max_drawdown
+        result.metadata['trading_halted'] = trading_halted
+
         logger.info(
             f"Re-entry backtest completed: {result.total_trades} trades "
-            f"from {signals_checked} signals checked (immediate re-entry enabled)"
+            f"from {signals_checked} signals checked (immediate re-entry enabled, "
+            f"max_drawdown={max_drawdown:.2f}%)"
         )
 
         return result

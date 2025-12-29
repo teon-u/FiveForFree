@@ -96,6 +96,8 @@ def run_api_server(host: str, port: int) -> None:
         host: API host address
         port: API port number
     """
+    import asyncio
+
     try:
         logger.info(f"Starting FastAPI server on {host}:{port}...")
 
@@ -114,8 +116,9 @@ def run_api_server(host: str, port: int) -> None:
 
         server = uvicorn.Server(config)
 
-        # Run server
-        server.run()
+        # Run server with proper async handling
+        # server.run() returns immediately in threads, use serve() with asyncio.run() instead
+        asyncio.run(server.serve())
 
     except Exception as e:
         logger.error(f"FastAPI server failed: {e}")

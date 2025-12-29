@@ -60,6 +60,51 @@ class TickerDetail(BaseModel):
     model_status: dict = Field(default_factory=dict, description="Model training status")
 
 
+class ActiveTickersResponse(BaseModel):
+    """Active tickers simple response."""
+
+    tickers: List[str] = Field(..., description="List of active ticker symbols")
+    timestamp: str = Field(..., description="Response timestamp")
+
+
+@router.get("/active", response_model=ActiveTickersResponse)
+async def get_active_tickers(
+    model_manager: ModelManager = Depends(get_model_manager),
+) -> ActiveTickersResponse:
+    """
+    Get list of active ticker symbols (tickers with trained models).
+
+    This is a lightweight endpoint for components that just need ticker symbols.
+
+    Args:
+        model_manager: Model manager instance
+
+    Returns:
+        ActiveTickersResponse with ticker symbol list
+    """
+    try:
+        # Get tickers that have trained models
+        trained_tickers = model_manager.get_tickers()
+
+        if not trained_tickers:
+            # Fallback to default tickers if no models
+            from config.settings import settings
+            trained_tickers = getattr(settings, 'DEFAULT_TICKERS', ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA'])
+
+        return ActiveTickersResponse(
+            tickers=trained_tickers,
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get active tickers: {e}")
+        # Return fallback tickers instead of error
+        return ActiveTickersResponse(
+            tickers=['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA', 'HOOD', 'AVGO', 'MU'],
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+
 @router.get("", response_model=TickerListResponse)
 @router.get("/", response_model=TickerListResponse)
 async def list_tickers(

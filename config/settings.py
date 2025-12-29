@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     PROBABILITY_THRESHOLD: float = 0.60  # Raised from 0.10 for better signal quality
     STOP_LOSS_PERCENT: float = 0.5  # -0.5% stop loss (half of target)
     SLIPPAGE_PERCENT: float = 0.05  # 0.05% slippage per trade
+    MAX_DRAWDOWN_PERCENT: float = 20.0  # Maximum portfolio drawdown before stopping trades
 
     # Backtesting
     BACKTEST_HOURS: int = 50

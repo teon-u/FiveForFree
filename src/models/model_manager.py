@@ -6,9 +6,11 @@ from typing import Dict, List, Optional, Tuple, Any
 import pickle
 
 from loguru import logger
+from sqlalchemy import select
 
 from config.settings import settings
 from src.models.base_model import BaseModel
+from src.utils.database import get_db, ModelPerformance
 
 
 class ModelManager:
@@ -101,6 +103,20 @@ class ModelManager:
                         # (it was excluded from pickle to avoid 340MB files)
                         if model_type == 'ensemble':
                             model.set_model_manager(self)
+
+                        # Ensure cached_stats attributes exist (backward compatibility)
+                        if not hasattr(model, 'cached_stats'):
+                            model.cached_stats = None
+                        if not hasattr(model, 'cached_stats_updated_at'):
+                            model.cached_stats_updated_at = None
+
+                        # Restore cached_stats from DB if not present in memory
+                        if model.cached_stats is None:
+                            db_stats = self._load_cached_stats_from_db(ticker, model_type, target)
+                            if db_stats:
+                                model.cached_stats = db_stats
+                                model.cached_stats_updated_at = datetime.now()
+                                logger.debug(f"Restored cached_stats from DB for {ticker}/{model_type}_{target}")
 
                         self._models[ticker][model_type][target] = model
                         loaded_count += 1
@@ -306,6 +322,9 @@ class ModelManager:
         """
         Get performance metrics for all models of a ticker.
 
+        Uses database ModelPerformance table as primary source.
+        Falls back to in-memory stats if no DB record exists.
+
         Args:
             ticker: Ticker symbol
 
@@ -318,26 +337,142 @@ class ModelManager:
         if ticker not in self._models:
             return performances
 
+        # Query DB for this ticker's performance records
+        # Store extracted values (not SQLAlchemy objects) to avoid detached instance errors
+        db_performances: Dict[str, Dict[str, Dict[str, Any]]] = {}  # {target: {model_type: extracted_data}}
+        try:
+            with get_db() as db:
+                # Get the most recent performance record for each model_type and symbol
+                stmt = (
+                    select(ModelPerformance)
+                    .where(ModelPerformance.symbol == ticker)
+                    .order_by(ModelPerformance.evaluation_date.desc())
+                )
+                records = db.execute(stmt).scalars().all()
+
+                # Group by target direction (from metrics_json) and model_type
+                # Prefer records with precision > 0 over empty records
+                for record in records:
+                    target_direction = None
+                    metrics_json = record.metrics_json
+                    if metrics_json and 'target_direction' in metrics_json:
+                        target_direction = metrics_json['target_direction']
+
+                    if target_direction is None:
+                        continue
+
+                    if target_direction not in db_performances:
+                        db_performances[target_direction] = {}
+
+                    # Check if this record has meaningful precision data
+                    precision = metrics_json.get('precision', 0.0) if metrics_json else 0.0
+                    has_data = precision > 0
+
+                    # Extract values from SQLAlchemy object while session is still active
+                    extracted_data = {
+                        'metrics_json': dict(metrics_json) if metrics_json else {},
+                        'total_trades': record.total_trades,
+                        'total_predictions': record.total_predictions,
+                        'precision': precision
+                    }
+
+                    # Prefer records with precision > 0
+                    if record.model_type not in db_performances[target_direction]:
+                        # No record yet, use this one
+                        db_performances[target_direction][record.model_type] = extracted_data
+                    else:
+                        # Already have a record, only replace if:
+                        # - Current record has no data (precision=0) AND new record has data
+                        existing_data = db_performances[target_direction][record.model_type]
+                        existing_precision = existing_data.get('precision', 0.0)
+                        existing_has_data = existing_precision > 0
+
+                        if not existing_has_data and has_data:
+                            # Replace empty record with one that has data
+                            db_performances[target_direction][record.model_type] = extracted_data
+
+        except Exception as e:
+            logger.warning(f"Failed to query DB for performances: {e}")
+
+        # Build performance dict from models
         for model_type, targets in self._models[ticker].items():
             for target, model in targets.items():
                 if target not in performances:
                     performances[target] = {}
 
+                # Try in-memory stats first (most recent realtime data)
                 stats = model.get_prediction_stats(hours=settings.BACKTEST_HOURS)
+                db_data = db_performances.get(target, {}).get(model_type)
 
-                performances[target][model_type] = {
-                    'hit_rate_50h': stats['precision'] * 100,  # Precision as percentage
-                    'precision': stats['precision'],
-                    'recall': stats['recall'],
-                    'signal_rate': stats.get('signal_rate', 0.0),
-                    'signal_count': stats.get('signal_count', 0),
-                    'practicality_grade': stats.get('practicality_grade', 'D'),
-                    'total_predictions': stats['total_predictions'],
-                    'is_trained': model.is_trained,
-                    'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None
-                }
+                if stats['total_predictions'] > 0:
+                    # Use in-memory stats (most recent - reflects realtime collection)
+                    performances[target][model_type] = {
+                        'hit_rate_50h': stats['precision'] * 100,  # Precision as percentage
+                        'precision': stats['precision'],
+                        'recall': stats['recall'],
+                        'signal_rate': stats.get('signal_rate', 0.0),
+                        'signal_count': stats.get('signal_count', 0),
+                        'practicality_grade': stats.get('practicality_grade', 'D'),
+                        'total_predictions': stats['total_predictions'],
+                        'is_trained': model.is_trained,
+                        'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None,
+                        'source': 'memory'  # Indicate data source for debugging
+                    }
+                elif db_data and db_data.get('metrics_json'):
+                    # Fallback to DB values (historical data when no recent predictions)
+                    metrics_json = db_data['metrics_json']
+                    precision = metrics_json.get('precision', 0.0)
+                    recall = metrics_json.get('recall', 0.0)
+                    prediction_rate = metrics_json.get('prediction_rate', 0.0)
+
+                    performances[target][model_type] = {
+                        'hit_rate_50h': precision * 100,  # Precision as percentage
+                        'precision': precision,
+                        'recall': recall,
+                        'signal_rate': prediction_rate,
+                        'signal_count': db_data['total_trades'],
+                        'practicality_grade': self._calculate_practicality_grade(precision, prediction_rate),
+                        'total_predictions': db_data['total_predictions'],
+                        'is_trained': model.is_trained,
+                        'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None,
+                        'source': 'db'  # Indicate data source for debugging
+                    }
+                else:
+                    # No data available
+                    performances[target][model_type] = {
+                        'hit_rate_50h': 0.0,
+                        'precision': 0.0,
+                        'recall': 0.0,
+                        'signal_rate': 0.0,
+                        'signal_count': 0,
+                        'practicality_grade': 'D',
+                        'total_predictions': 0,
+                        'is_trained': model.is_trained,
+                        'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None,
+                        'source': 'none'  # No data available
+                    }
 
         return performances
+
+    def _calculate_practicality_grade(self, precision: float, signal_rate: float) -> str:
+        """
+        Calculate practicality grade based on precision and signal rate.
+
+        Args:
+            precision: Prediction precision (0-1)
+            signal_rate: Signal rate (0-1)
+
+        Returns:
+            Grade from A to D
+        """
+        if precision >= 0.7 and signal_rate >= 0.1:
+            return 'A'
+        elif precision >= 0.6 and signal_rate >= 0.05:
+            return 'B'
+        elif precision >= 0.5 and signal_rate >= 0.02:
+            return 'C'
+        else:
+            return 'D'
 
     def validate_models(self, ticker: str) -> Dict[str, bool]:
         """
@@ -365,6 +500,100 @@ class ModelManager:
                 validation[key] = False
 
         return validation
+
+    def _load_cached_stats_from_db(self, ticker: str, model_type: str, target: str) -> Optional[dict]:
+        """
+        Load cached performance stats from DB for a specific model.
+
+        Args:
+            ticker: Ticker symbol
+            model_type: Model type (xgboost, lightgbm, etc.)
+            target: Target direction (up/down)
+
+        Returns:
+            Dict with cached stats or None if not found
+        """
+        try:
+            with get_db() as db:
+                # Get the most recent performance record for this model
+                stmt = (
+                    select(ModelPerformance)
+                    .where(ModelPerformance.symbol == ticker)
+                    .where(ModelPerformance.model_type == model_type)
+                    .order_by(ModelPerformance.evaluation_date.desc())
+                    .limit(1)
+                )
+                record = db.execute(stmt).scalar_one_or_none()
+
+                if record and record.metrics_json:
+                    metrics = record.metrics_json
+                    # Only return if target matches and has meaningful data
+                    if metrics.get('target_direction') == target:
+                        precision = metrics.get('precision', 0.0)
+                        if precision > 0:
+                            return {
+                                'precision': precision,
+                                'recall': metrics.get('recall', 0.0),
+                                'accuracy': record.accuracy,
+                                'signal_rate': metrics.get('signal_rate', 0.0),
+                                'signal_count': metrics.get('signal_count', 0),
+                                'total_predictions': record.total_predictions,
+                                'true_positives': metrics.get('true_positives', 0),
+                                'false_positives': metrics.get('false_positives', 0),
+                                'true_negatives': metrics.get('true_negatives', 0),
+                                'false_negatives': metrics.get('false_negatives', 0),
+                                'avg_probability': metrics.get('avg_probability', 0.5),
+                            }
+        except Exception as e:
+            logger.warning(f"Failed to load cached stats from DB for {ticker}/{model_type}_{target}: {e}")
+
+        return None
+
+    def save_cached_stats_to_db(self, ticker: str, model_type: str, target: str, stats: dict) -> bool:
+        """
+        Save cached performance stats to DB for persistence across restarts.
+
+        Args:
+            ticker: Ticker symbol
+            model_type: Model type
+            target: Target direction
+            stats: Performance stats dict
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            with get_db() as db:
+                now = datetime.now()
+                record = ModelPerformance(
+                    model_type=model_type,
+                    symbol=ticker,
+                    evaluation_date=now,
+                    period_start=now,
+                    period_end=now,
+                    total_predictions=stats.get('total_predictions', 0),
+                    correct_predictions=int(stats.get('accuracy', 0) * stats.get('total_predictions', 0)),
+                    accuracy=stats.get('accuracy', 0.0),
+                    metrics_json={
+                        'target_direction': target,
+                        'precision': stats.get('precision', 0.0),
+                        'recall': stats.get('recall', 0.0),
+                        'signal_rate': stats.get('signal_rate', 0.0),
+                        'signal_count': stats.get('signal_count', 0),
+                        'true_positives': stats.get('true_positives', 0),
+                        'false_positives': stats.get('false_positives', 0),
+                        'true_negatives': stats.get('true_negatives', 0),
+                        'false_negatives': stats.get('false_negatives', 0),
+                        'avg_probability': stats.get('avg_probability', 0.5),
+                    }
+                )
+                db.add(record)
+                db.commit()
+                logger.debug(f"Saved cached stats to DB for {ticker}/{model_type}_{target}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to save cached stats to DB: {e}")
+            return False
 
     def get_summary(self) -> Dict[str, Any]:
         """

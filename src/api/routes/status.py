@@ -63,9 +63,9 @@ async def get_system_status() -> SystemStatus:
             # Count minute bars
             total_bars = db.execute(select(func.count(MinuteBar.id))).scalar() or 0
 
-            # Get tickers with data
+            # Get tickers with data (normalize to uppercase for consistent comparison)
             symbols_stmt = select(MinuteBar.symbol).distinct()
-            tickers_with_data = set(db.execute(symbols_stmt).scalars().all())
+            tickers_with_data = set(s.upper() for s in db.execute(symbols_stmt).scalars().all())
 
             # Date range
             min_date = db.execute(select(func.min(MinuteBar.timestamp))).scalar()
@@ -80,7 +80,8 @@ async def get_system_status() -> SystemStatus:
 
         new_gainers = []
         for g in market_gainers[:10]:
-            if g.ticker not in trained_tickers:
+            # Normalize case for consistent comparison
+            if g.ticker.upper() not in trained_tickers:
                 new_gainers.append({
                     "ticker": g.ticker,
                     "name": g.company_name,
@@ -116,8 +117,9 @@ async def discover_new_tickers() -> DiscoveredTickersResponse:
         trained_tickers = set(model_manager.get_tickers())
 
         with get_db() as db:
+            # Normalize to uppercase for consistent comparison with model_manager
             symbols_stmt = select(MinuteBar.symbol).distinct()
-            tickers_with_data = set(db.execute(symbols_stmt).scalars().all())
+            tickers_with_data = set(s.upper() for s in db.execute(symbols_stmt).scalars().all())
 
         # Get market gainers
         selector = TickerSelector()
@@ -128,8 +130,9 @@ async def discover_new_tickers() -> DiscoveredTickersResponse:
         needing_training = []
 
         for g in market_gainers:
-            has_data = g.ticker in tickers_with_data
-            has_model = g.ticker in trained_tickers
+            ticker_upper = g.ticker.upper()
+            has_data = ticker_upper in tickers_with_data
+            has_model = ticker_upper in trained_tickers
 
             gainer_infos.append(NewTickerInfo(
                 ticker=g.ticker,
@@ -233,6 +236,13 @@ async def _train_ticker_background(ticker: str):
 
         success_count = sum(1 for v in results.values() if v)
         logger.info(f"{ticker}: Training complete - {success_count}/{len(results)} models trained")
+
+        # Step 5: Update model_manager's ticker list after successful training
+        # This ensures get_tickers() returns the newly trained ticker
+        if success_count > 0:
+            if ticker not in model_manager._tickers:
+                model_manager._tickers.append(ticker)
+                logger.info(f"{ticker}: Added to trained tickers list")
 
     except Exception as e:
         logger.error(f"Background training failed for {ticker}: {e}")

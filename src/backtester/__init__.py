@@ -11,10 +11,19 @@ on historical data using realistic trading rules:
 Components:
 - simulator: Backtest execution engine with trade simulation
 - metrics: Performance metrics calculation (win rate, Sharpe, profit factor, etc.)
+- investment_strategy: Enhanced investment strategy with S+ grade and rebalancing
 """
 
 from .simulator import BacktestSimulator, Trade, BacktestResult
 from .metrics import PerformanceMetrics, ModelPerformanceTracker
+from .investment_strategy import (
+    InvestmentStrategy,
+    StockGrade,
+    StockPerformance,
+    PortfolioAllocation,
+    TransactionCosts,
+    calculate_enhanced_metrics
+)
 
 __all__ = [
     'BacktestSimulator',
@@ -22,4 +31,10 @@ __all__ = [
     'BacktestResult',
     'PerformanceMetrics',
     'ModelPerformanceTracker',
+    'InvestmentStrategy',
+    'StockGrade',
+    'StockPerformance',
+    'PortfolioAllocation',
+    'TransactionCosts',
+    'calculate_enhanced_metrics',
 ]

@@ -604,17 +604,34 @@ async def get_model_performance_details(
         ticker = ticker.upper()
         logger.info(f"Getting detailed performance for {ticker}")
 
-        # Get best model (up direction for now)
+        # Get best model - compare up and down to match overview logic
         try:
-            best_type, best_model = model_manager.get_best_model(ticker, "up")
+            best_up_type, best_up_model = model_manager.get_best_model(ticker, "up")
+            up_stats = best_up_model.get_prediction_stats(hours=50)
         except ValueError:
+            best_up_type = None
+            up_stats = {'accuracy': 0.0}
+
+        try:
+            best_down_type, best_down_model = model_manager.get_best_model(ticker, "down")
+            down_stats = best_down_model.get_prediction_stats(hours=50)
+        except ValueError:
+            best_down_type = None
+            down_stats = {'accuracy': 0.0}
+
+        # Select model with higher accuracy (same logic as overview)
+        if best_up_type is None and best_down_type is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No trained models found for ticker {ticker}",
             )
 
-        # Get confusion matrix and basic stats
-        stats = best_model.get_prediction_stats(hours=50)
+        if up_stats['accuracy'] >= down_stats['accuracy']:
+            best_model = best_up_model
+            stats = up_stats
+        else:
+            best_model = best_down_model
+            stats = down_stats
 
         # Get ROC curve
         roc_data = best_model.get_roc_curve_data(hours=50)

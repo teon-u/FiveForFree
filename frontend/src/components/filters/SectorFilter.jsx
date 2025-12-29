@@ -70,12 +70,12 @@ export default function SectorFilter() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-10"
+            className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Menu */}
-          <div className="absolute top-full left-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-20 overflow-hidden">
+          {/* Menu - z-50 for consistent z-index with other dropdowns */}
+          <div className="absolute top-full left-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50 overflow-hidden">
             {/* All option */}
             <button
               onClick={handleAllClick}

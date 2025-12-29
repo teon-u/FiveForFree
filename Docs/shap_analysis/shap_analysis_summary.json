@@ -1,0 +1,2280 @@
+{
+  "n_models_analyzed": 20,
+  "n_tickers": 5,
+  "global_feature_importance": [
+    {
+      "feature": "vix_proxy",
+      "mean_importance": 0.7011983135261729,
+      "std_importance": 0.4271644225415303,
+      "count": 20
+    },
+    {
+      "feature": "volatility_60m",
+      "mean_importance": 0.6167731681409474,
+      "std_importance": 0.3834803663261673,
+      "count": 20
+    },
+    {
+      "feature": "atr_14_normalized",
+      "mean_importance": 0.6137581546793693,
+      "std_importance": 0.42169450575420303,
+      "count": 20
+    },
+    {
+      "feature": "volume_ma_15",
+      "mean_importance": 0.6040165120929493,
+      "std_importance": 0.34892462278146386,
+      "count": 20
+    },
+    {
+      "feature": "bb_width",
+      "mean_importance": 0.3275171896181849,
+      "std_importance": 0.15630632160929267,
+      "count": 20
+    },
+    {
+      "feature": "volume_ma_5",
+      "mean_importance": 0.3002320007879905,
+      "std_importance": 0.16672137119379593,
+      "count": 18
+    },
+    {
+      "feature": "volatility_15m",
+      "mean_importance": 0.279912291769732,
+      "std_importance": 0.1652662194706228,
+      "count": 20
+    },
+    {
+      "feature": "day_of_week",
+      "mean_importance": 0.23147793755866158,
+      "std_importance": 0.1310845884034979,
+      "count": 16
+    },
+    {
+      "feature": "sector_return_15m",
+      "mean_importance": 0.20508808160210804,
+      "std_importance": 0.0889960185799546,
+      "count": 12
+    },
+    {
+      "feature": "is_month_start",
+      "mean_importance": 0.20071453488777313,
+      "std_importance": 0.04697202852368262,
+      "count": 3
+    },
+    {
+      "feature": "high_low_range",
+      "mean_importance": 0.17728014780606172,
+      "std_importance": 0.09096522109189134,
+      "count": 11
+    },
+    {
+      "feature": "williams_r",
+      "mean_importance": 0.17665536363856404,
+      "std_importance": 0.0943723800050219,
+      "count": 16
+    },
+    {
+      "feature": "hour_of_day",
+      "mean_importance": 0.17257923640219217,
+      "std_importance": 0.07839445373621069,
+      "count": 17
+    },
+    {
+      "feature": "is_fomc_week",
+      "mean_importance": 0.17108987767984482,
+      "std_importance": 0.0,
+      "count": 1
+    },
+    {
+      "feature": "intraday_range",
+      "mean_importance": 0.16963527887314092,
+      "std_importance": 0.09403449408040016,
+      "count": 10
+    },
+    {
+      "feature": "macd_signal",
+      "mean_importance": 0.16935744373523434,
+      "std_importance": 0.06777818135245624,
+      "count": 18
+    },
+    {
+      "feature": "macd_hist",
+      "mean_importance": 0.15938832098385042,
+      "std_importance": 0.05314705362410976,
+      "count": 18
+    },
+    {
+      "feature": "ma_cross_5_15",
+      "mean_importance": 0.15498248039887463,
+      "std_importance": 0.08378333972275889,
+      "count": 10
+    },
+    {
+      "feature": "is_friday",
+      "mean_importance": 0.13631155907041717,
+      "std_importance": 0.02953082927115228,
+      "count": 3
+    },
+    {
+      "feature": "volume_trend",
+      "mean_importance": 0.13453835338092468,
+      "std_importance": 0.04056079919645105,
+      "count": 17
+    },
+    {
+      "feature": "macd",
+      "mean_importance": 0.1321749177696551,
+      "std_importance": 0.0310078735973489,
+      "count": 15
+    },
+    {
+      "feature": "returns_15m",
+      "mean_importance": 0.12498108204803263,
+      "std_importance": 0.0520048549582501,
+      "count": 9
+    },
+    {
+      "feature": "spy_qqq_divergence",
+      "mean_importance": 0.12350243330001831,
+      "std_importance": 0.0,
+      "count": 1
+    },
+    {
+      "feature": "volatility_ratio",
+      "mean_importance": 0.12224636602941172,
+      "std_importance": 0.03582179480223936,
+      "count": 17
+    },
+    {
+      "feature": "price_momentum_15m",
+      "mean_importance": 0.1181391207696768,
+      "std_importance": 0.04006711798886785,
+      "count": 13
+    },
+    {
+      "feature": "stock_vs_sector",
+      "mean_importance": 0.11462851003688909,
+      "std_importance": 0.03125137473891805,
+      "count": 9
+    },
+    {
+      "feature": "bond_return",
+      "mean_importance": 0.11221886426210403,
+      "std_importance": 0.0,
+      "count": 1
+    },
+    {
+      "feature": "volatility_5m",
+      "mean_importance": 0.1098333524427525,
+      "std_importance": 0.0318798834880979,
+      "count": 14
+    },
+    {
+      "feature": "price_momentum_5m",
+      "mean_importance": 0.10720116450825992,
+      "std_importance": 0.04265284507401444,
+      "count": 5
+    },
+    {
+      "feature": "minutes_since_open",
+      "mean_importance": 0.10471363701974215,
+      "std_importance": 0.022432071035806304,
+      "count": 5
+    }
+  ],
+  "top_10_features": [
+    "vix_proxy",
+    "volatility_60m",
+    "atr_14_normalized",
+    "volume_ma_15",
+    "bb_width",
+    "volume_ma_5",
+    "volatility_15m",
+    "day_of_week",
+    "sector_return_15m",
+    "is_month_start"
+  ],
+  "per_model_results": [
+    {
+      "ticker": "MRVL",
+      "model_type": "lightgbm",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "vix_proxy",
+          "importance": 1.100368866871814
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.49450183768094264
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.4655392005821012
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.42575504304593237
+        },
+        {
+          "feature": "is_month_start",
+          "importance": 0.26714059914645305
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.2449200018567791
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.24255289567192356
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.20740403997133008
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.16371747836425765
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.13572468230923015
+        },
+        {
+          "feature": "is_month_end",
+          "importance": 0.11799854205523733
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.11619053184057701
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.11412420377182715
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.11090522566115789
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.09995634882010176
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.09395302248205743
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.09349088307904356
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.08842834562342103
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.08264887661086658
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.07579067509694093
+        }
+      ],
+      "top_features": [
+        "vix_proxy",
+        "atr_14_normalized",
+        "bb_width",
+        "volume_ma_15",
+        "is_month_start",
+        "volatility_60m",
+        "intraday_range",
+        "hour_of_day",
+        "volatility_15m",
+        "volatility_5m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "MRVL",
+      "model_type": "lightgbm",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.9346449262502965
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.8561573235108334
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.3940040546392172
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.356442224443003
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.3014293786076209
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.2988689197184175
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.25637560633951684
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.2555429120863689
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.2362280450804851
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.2236473403202663
+        },
+        {
+          "feature": "macd",
+          "importance": 0.18675520358208664
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.18263048659897557
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.11989905806279307
+        },
+        {
+          "feature": "minutes_since_open",
+          "importance": 0.11950130736259905
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.10485886024681591
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.1015605627532727
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.08419431213848556
+        },
+        {
+          "feature": "is_month_end",
+          "importance": 0.07514218566910721
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.06820791380232828
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.06804650737727047
+        }
+      ],
+      "top_features": [
+        "atr_14_normalized",
+        "vix_proxy",
+        "day_of_week",
+        "volume_ma_5",
+        "volatility_15m",
+        "volatility_60m",
+        "volume_ma_15",
+        "williams_r",
+        "sector_return_15m",
+        "volume_trend"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "MRVL",
+      "model_type": "xgboost",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "vix_proxy",
+          "importance": 1.2636042833328247
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.5980027914047241
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.39505308866500854
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.3844429850578308
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.29910141229629517
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.2845177948474884
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.20124684274196625
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.19627846777439117
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.1804964542388916
+        },
+        {
+          "feature": "is_month_start",
+          "importance": 0.16799210011959076
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.16100504994392395
+        },
+        {
+          "feature": "macd",
+          "importance": 0.1545325070619583
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.1485988199710846
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.13017483055591583
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.11389992386102676
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.11259949207305908
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.10701517760753632
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.10301519185304642
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.09275773912668228
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.08188673853874207
+        }
+      ],
+      "top_features": [
+        "vix_proxy",
+        "atr_14_normalized",
+        "volume_ma_15",
+        "high_low_range",
+        "bb_width",
+        "volatility_15m",
+        "hour_of_day",
+        "volatility_60m",
+        "volatility_5m",
+        "is_month_start"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "MRVL",
+      "model_type": "xgboost",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "vix_proxy",
+          "importance": 0.9085412621498108
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.9080336689949036
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.4412299394607544
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.3421139717102051
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.34142401814460754
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.32570284605026245
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.3196869492530823
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.20324446260929108
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.1751101166009903
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.1615234762430191
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.15986040234565735
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.15324683487415314
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.1529179960489273
+        },
+        {
+          "feature": "minutes_since_open",
+          "importance": 0.13936813175678253
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.1331627517938614
+        },
+        {
+          "feature": "macd",
+          "importance": 0.1157696321606636
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.11180119961500168
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.10272171348333359
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.07509520649909973
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.07101675868034363
+        }
+      ],
+      "top_features": [
+        "vix_proxy",
+        "atr_14_normalized",
+        "day_of_week",
+        "sector_return_15m",
+        "volatility_15m",
+        "volatility_60m",
+        "volume_ma_15",
+        "williams_r",
+        "volume_ma_5",
+        "volume_trend"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "INTC",
+      "model_type": "lightgbm",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "atr_14_normalized",
+          "importance": 1.3107652775966825
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.41215946385639896
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.37890600550147746
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.2996265273992675
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.2797093341064941
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.24865636163142582
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.2042685280135521
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.18843946246573773
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.18337785015509486
+        },
+        {
+          "feature": "is_friday",
+          "importance": 0.1773674061574605
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.17554881312215334
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.15962128284271998
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.15870302866877206
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.15726593305084585
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.1529022954272374
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.13916657584766529
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.12833242943247286
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.11635442193551461
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.10731037474170038
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.09270386528450861
+        }
+      ],
+      "top_features": [
+        "atr_14_normalized",
+        "volatility_60m",
+        "volume_ma_15",
+        "vix_proxy",
+        "volume_ma_5",
+        "sector_return_15m",
+        "macd_signal",
+        "hour_of_day",
+        "williams_r",
+        "is_friday"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "INTC",
+      "model_type": "lightgbm",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.9658185334294405
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.8926902831786786
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.6967533350222667
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.6157587642469334
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.502564791648692
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.3694566808362539
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.2774468041641672
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.1847368328360163
+        },
+        {
+          "feature": "is_fomc_week",
+          "importance": 0.17108987767984482
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.16569661676439082
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.14926242996572742
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.12330381856295841
+        },
+        {
+          "feature": "macd",
+          "importance": 0.11597598702734324
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.1136259176339381
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.11086301085240655
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.105894613318231
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.0859037406220719
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.08408986877954697
+        },
+        {
+          "feature": "minutes_since_open",
+          "importance": 0.07508933760072804
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.07438115564863225
+        }
+      ],
+      "top_features": [
+        "atr_14_normalized",
+        "volume_ma_15",
+        "volatility_60m",
+        "vix_proxy",
+        "bb_width",
+        "hour_of_day",
+        "day_of_week",
+        "macd_hist",
+        "is_fomc_week",
+        "sector_return_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "INTC",
+      "model_type": "xgboost",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "atr_14_normalized",
+          "importance": 1.5168789625167847
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.7903775572776794
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.5792465209960938
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.5610352158546448
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.486107736825943
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.3243320882320404
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.30368858575820923
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.21432624757289886
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.17262040078639984
+        },
+        {
+          "feature": "macd",
+          "importance": 0.17134088277816772
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.15208843350410461
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.14106439054012299
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.14063242077827454
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.13813510537147522
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.1316562443971634
+        },
+        {
+          "feature": "is_friday",
+          "importance": 0.12241069227457047
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.12075985968112946
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.12011191993951797
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.11718370020389557
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.11407307535409927
+        }
+      ],
+      "top_features": [
+        "atr_14_normalized",
+        "volatility_60m",
+        "volume_ma_5",
+        "vix_proxy",
+        "volume_ma_15",
+        "sector_return_15m",
+        "high_low_range",
+        "williams_r",
+        "macd_signal",
+        "macd"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "INTC",
+      "model_type": "xgboost",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volume_ma_15",
+          "importance": 1.0649909973144531
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 1.0390751361846924
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.6262995004653931
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.5993037819862366
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.5363891124725342
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.334669828414917
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.3291335105895996
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.2747274339199066
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.2570869028568268
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.2458658665418625
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.18925784528255463
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.1483304500579834
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.14270417392253876
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.11989661306142807
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.1106431633234024
+        },
+        {
+          "feature": "is_friday",
+          "importance": 0.10915657877922058
+        },
+        {
+          "feature": "minutes_since_open",
+          "importance": 0.0914575532078743
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.08952729403972626
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.07972502708435059
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.0743926540017128
+        }
+      ],
+      "top_features": [
+        "volume_ma_15",
+        "atr_14_normalized",
+        "volatility_60m",
+        "bb_width",
+        "vix_proxy",
+        "macd_hist",
+        "day_of_week",
+        "sector_return_15m",
+        "hour_of_day",
+        "volume_ma_5"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LCID",
+      "model_type": "lightgbm",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 0.8285601154097255
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.5614090908678074
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.4865011777990265
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.27919030268021794
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.2734352330718582
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.232565269272632
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.227228252636022
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.21566398339619336
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.20586343663275442
+        },
+        {
+          "feature": "macd",
+          "importance": 0.17169686585290722
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.14419127594345107
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.10989476767058141
+        },
+        {
+          "feature": "money_flow_ratio",
+          "importance": 0.10783306322337058
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.10481342980226385
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.08977706519557044
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.08885241099504612
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.08681199207426053
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.07420699641601386
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.07248471657694482
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.06838956996737978
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "volume_ma_15",
+        "day_of_week",
+        "atr_14_normalized",
+        "volume_ma_5",
+        "macd_signal",
+        "vix_proxy",
+        "bb_width",
+        "hour_of_day",
+        "macd"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LCID",
+      "model_type": "lightgbm",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 0.9277374055177964
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.44865652158767233
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.44139815649270875
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.30495094200313494
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.23783147636127444
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.23409543224776558
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.23192402205569307
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.1902100931762891
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.1697667681638087
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.15928289345301647
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.1264782506222675
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.11578117071523988
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.11528336088452319
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.11258995105003562
+        },
+        {
+          "feature": "macd",
+          "importance": 0.10495267491854603
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.10359892304699747
+        },
+        {
+          "feature": "price_acceleration",
+          "importance": 0.08475184179452631
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.0834144021931291
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.06862471191029836
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.06611065940682914
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "vix_proxy",
+        "bb_width",
+        "atr_14_normalized",
+        "volatility_15m",
+        "volume_ma_5",
+        "volume_ma_15",
+        "day_of_week",
+        "macd_hist",
+        "volume_trend"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LCID",
+      "model_type": "xgboost",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 0.7910760045051575
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.36928051710128784
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.34577620029449463
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.3083072304725647
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.28143858909606934
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.2635989487171173
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.2596738040447235
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.20832419395446777
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.2035890370607376
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.15015624463558197
+        },
+        {
+          "feature": "macd",
+          "importance": 0.13914382457733154
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.13132807612419128
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.12261895090341568
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.11197657883167267
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.10905753076076508
+        },
+        {
+          "feature": "money_flow_ratio",
+          "importance": 0.10865020006895065
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.07859841734170914
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.07221642881631851
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.06945899873971939
+        },
+        {
+          "feature": "price_acceleration",
+          "importance": 0.06599487364292145
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "day_of_week",
+        "volume_ma_15",
+        "macd_signal",
+        "vix_proxy",
+        "atr_14_normalized",
+        "volume_ma_5",
+        "hour_of_day",
+        "bb_width",
+        "volatility_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LCID",
+      "model_type": "xgboost",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 0.9448311924934387
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.4624292552471161
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.3966582715511322
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.2482379525899887
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.2288254052400589
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.21780134737491608
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.2135639488697052
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.16572305560112
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.165623739361763
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.14960835874080658
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.12891146540641785
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.12481734901666641
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.11367927491664886
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.09390030801296234
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.09255144000053406
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.08923535794019699
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.08305516839027405
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.07969921827316284
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.07789014279842377
+        },
+        {
+          "feature": "macd",
+          "importance": 0.07736551016569138
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "vix_proxy",
+        "bb_width",
+        "atr_14_normalized",
+        "day_of_week",
+        "volume_ma_15",
+        "volume_ma_5",
+        "volatility_15m",
+        "macd_hist",
+        "williams_r"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LULU",
+      "model_type": "lightgbm",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.9192165753799525
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.8988607189749975
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.6475317970464157
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.5113901254177767
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.2808735268110245
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.25927498425854145
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.23825481744002136
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.2122542929359002
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.1843911950065744
+        },
+        {
+          "feature": "is_month_start",
+          "importance": 0.1670109053972756
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.15214551999162215
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.1477912794529785
+        },
+        {
+          "feature": "macd",
+          "importance": 0.1427928017339338
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.13615893748622265
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.11734485707671999
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.11100226665731415
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.10650181588645383
+        },
+        {
+          "feature": "is_month_end",
+          "importance": 0.10047336478814271
+        },
+        {
+          "feature": "is_fomc_day",
+          "importance": 0.09229339597477464
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.09067142395957052
+        }
+      ],
+      "top_features": [
+        "volume_ma_15",
+        "atr_14_normalized",
+        "volatility_60m",
+        "vix_proxy",
+        "macd_signal",
+        "volatility_15m",
+        "bb_width",
+        "high_low_range",
+        "volume_ma_5",
+        "is_month_start"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LULU",
+      "model_type": "lightgbm",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volume_ma_15",
+          "importance": 1.0965658567967764
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.587018943604182
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.36018674600307254
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.3386989368710918
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.3188491408259034
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.2791323571339194
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.22276614037304232
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.1850128920542066
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.150477908096749
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.15008106115010125
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.12687581241302043
+        },
+        {
+          "feature": "macd",
+          "importance": 0.11175660686968475
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.09694549195708356
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.09274312340831714
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.09250683693440946
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.08274280007040394
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.07919787239131594
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.07915234294849705
+        },
+        {
+          "feature": "price_momentum_5m",
+          "importance": 0.07526754364249343
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.07321504989389861
+        }
+      ],
+      "top_features": [
+        "volume_ma_15",
+        "bb_width",
+        "williams_r",
+        "volume_ma_5",
+        "vix_proxy",
+        "volatility_15m",
+        "ma_cross_5_15",
+        "volatility_60m",
+        "macd_signal",
+        "atr_14_normalized"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LULU",
+      "model_type": "xgboost",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "atr_14_normalized",
+          "importance": 1.0387439727783203
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.7239030599594116
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.7137107253074646
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.4382086992263794
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.31343019008636475
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.30535566806793213
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.22032864391803741
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.20706652104854584
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.20138375461101532
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.19551923871040344
+        },
+        {
+          "feature": "price_momentum_5m",
+          "importance": 0.18928615748882294
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.1829918920993805
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.18179774284362793
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.17736196517944336
+        },
+        {
+          "feature": "macd",
+          "importance": 0.1298215091228485
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.1229555681347847
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.11744005233049393
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.1120154932141304
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.104816734790802
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.10075980424880981
+        }
+      ],
+      "top_features": [
+        "atr_14_normalized",
+        "volatility_60m",
+        "volume_ma_15",
+        "vix_proxy",
+        "volatility_15m",
+        "macd_signal",
+        "bb_width",
+        "volume_ma_5",
+        "high_low_range",
+        "returns_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "LULU",
+      "model_type": "xgboost",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volume_ma_15",
+          "importance": 1.614721417427063
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.6550767421722412
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.602104663848877
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.419042706489563
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.37115275859832764
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.3368656039237976
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.3316468894481659
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.3248097598552704
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.2810927927494049
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.21453185379505157
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.16422916948795319
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.16319701075553894
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.15579962730407715
+        },
+        {
+          "feature": "macd",
+          "importance": 0.14242611825466156
+        },
+        {
+          "feature": "spy_qqq_divergence",
+          "importance": 0.12350243330001831
+        },
+        {
+          "feature": "price_acceleration",
+          "importance": 0.122770756483078
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.11648464947938919
+        },
+        {
+          "feature": "minutes_since_open",
+          "importance": 0.09815185517072678
+        },
+        {
+          "feature": "price_momentum_5m",
+          "importance": 0.08763083815574646
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.0846613198518753
+        }
+      ],
+      "top_features": [
+        "volume_ma_15",
+        "atr_14_normalized",
+        "bb_width",
+        "williams_r",
+        "volume_ma_5",
+        "volatility_60m",
+        "volatility_15m",
+        "vix_proxy",
+        "ma_cross_5_15",
+        "price_momentum_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "NVDA",
+      "model_type": "lightgbm",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 1.2481508227041538
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.6682902879151164
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.6300956706085311
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.3867176232918277
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.34563126502267233
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.31456464634632714
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.2158956976098258
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.20746477082871595
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.1887468396485485
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.18780440022086814
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.17778227045281267
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.16368688691225525
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.15255706487037968
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.14103285331504384
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.13647692201417672
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.12462773424138858
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.10667705206521425
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.08394207550268568
+        },
+        {
+          "feature": "price_acceleration",
+          "importance": 0.0830507578274325
+        },
+        {
+          "feature": "price_momentum_5m",
+          "importance": 0.07628972781229174
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "vix_proxy",
+        "volume_ma_5",
+        "volume_ma_15",
+        "bb_width",
+        "ma_cross_5_15",
+        "volatility_15m",
+        "hour_of_day",
+        "volatility_ratio",
+        "returns_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "NVDA",
+      "model_type": "lightgbm",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "vix_proxy",
+          "importance": 1.2499389153504599
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.6740905557857322
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.5907155215370993
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.268387891672159
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.2535379916327552
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.17138191248090637
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.15766318657023656
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.14704459721824265
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.13797898617200313
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.12397020387158737
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.120098877917074
+        },
+        {
+          "feature": "price_momentum_5m",
+          "importance": 0.10753155544194502
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.10427307641072216
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.09136038756710194
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.08907376551566051
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.08046886460219979
+        },
+        {
+          "feature": "macd",
+          "importance": 0.07896891776477723
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.07481786606292738
+        },
+        {
+          "feature": "money_flow_ratio",
+          "importance": 0.06905905824923544
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.06797892599456964
+        }
+      ],
+      "top_features": [
+        "vix_proxy",
+        "volume_ma_15",
+        "volatility_15m",
+        "bb_width",
+        "volatility_60m",
+        "price_momentum_15m",
+        "volume_trend",
+        "intraday_range",
+        "day_of_week",
+        "sector_return_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "NVDA",
+      "model_type": "xgboost",
+      "target": "up",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "volatility_60m",
+          "importance": 1.6633533239364624
+        },
+        {
+          "feature": "vix_proxy",
+          "importance": 0.9882670044898987
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.6883137822151184
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.6114516258239746
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.5234847068786621
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.33017951250076294
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.2653827369213104
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.22330568730831146
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.1967373490333557
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.16520532965660095
+        },
+        {
+          "feature": "stock_vs_sector",
+          "importance": 0.15739241242408752
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.12826548516750336
+        },
+        {
+          "feature": "macd_signal",
+          "importance": 0.12523239850997925
+        },
+        {
+          "feature": "williams_r",
+          "importance": 0.11351236701011658
+        },
+        {
+          "feature": "bond_return",
+          "importance": 0.11221886426210403
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.10745588690042496
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.09999468177556992
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.09746561199426651
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.09273133426904678
+        },
+        {
+          "feature": "volatility_5m",
+          "importance": 0.09102879464626312
+        }
+      ],
+      "top_features": [
+        "volatility_60m",
+        "vix_proxy",
+        "volume_ma_5",
+        "volume_ma_15",
+        "volatility_15m",
+        "bb_width",
+        "hour_of_day",
+        "atr_14_normalized",
+        "returns_15m",
+        "sector_return_15m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    },
+    {
+      "ticker": "NVDA",
+      "model_type": "xgboost",
+      "target": "down",
+      "n_samples": 500,
+      "feature_importance": [
+        {
+          "feature": "vix_proxy",
+          "importance": 1.9629783630371094
+        },
+        {
+          "feature": "volatility_15m",
+          "importance": 0.7528436779975891
+        },
+        {
+          "feature": "volume_ma_15",
+          "importance": 0.4873794913291931
+        },
+        {
+          "feature": "intraday_range",
+          "importance": 0.4181295335292816
+        },
+        {
+          "feature": "bb_width",
+          "importance": 0.2988167703151703
+        },
+        {
+          "feature": "sector_return_15m",
+          "importance": 0.29418084025382996
+        },
+        {
+          "feature": "day_of_week",
+          "importance": 0.22596678137779236
+        },
+        {
+          "feature": "macd_hist",
+          "importance": 0.2255536913871765
+        },
+        {
+          "feature": "volume_trend",
+          "importance": 0.19535516202449799
+        },
+        {
+          "feature": "volatility_60m",
+          "importance": 0.19354306161403656
+        },
+        {
+          "feature": "atr_14_normalized",
+          "importance": 0.1842638999223709
+        },
+        {
+          "feature": "volatility_ratio",
+          "importance": 0.17471031844615936
+        },
+        {
+          "feature": "volume_ma_5",
+          "importance": 0.16792917251586914
+        },
+        {
+          "feature": "high_low_range",
+          "importance": 0.16669631004333496
+        },
+        {
+          "feature": "ma_cross_5_15",
+          "importance": 0.1538388431072235
+        },
+        {
+          "feature": "hour_of_day",
+          "importance": 0.15142659842967987
+        },
+        {
+          "feature": "returns_15m",
+          "importance": 0.14139442145824432
+        },
+        {
+          "feature": "macd",
+          "importance": 0.13932472467422485
+        },
+        {
+          "feature": "volume_ratio",
+          "importance": 0.13092488050460815
+        },
+        {
+          "feature": "price_momentum_15m",
+          "importance": 0.12768582999706268
+        }
+      ],
+      "top_features": [
+        "vix_proxy",
+        "volatility_15m",
+        "volume_ma_15",
+        "intraday_range",
+        "bb_width",
+        "sector_return_15m",
+        "day_of_week",
+        "macd_hist",
+        "volume_trend",
+        "volatility_60m"
+      ],
+      "shap_values_shape": [
+        500,
+        52
+      ]
+    }
+  ]
+}

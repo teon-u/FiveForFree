@@ -52,13 +52,13 @@ export default function ModelComparison({ models }) {
               <tr key={modelType} className="hover:bg-surface-light/50 transition-colors">
                 <td className="font-semibold">{formatModelName(modelType)}</td>
                 <td className={`text-center ${getPrecisionColor(upHitRate)}`}>
-                  {upHitRate.toFixed(1)}%
+                  {upHitRate === 0 ? '수집 중' : `${upHitRate.toFixed(1)}%`}
                 </td>
                 <td className={`text-center ${getPrecisionColor(downHitRate)}`}>
-                  {downHitRate.toFixed(1)}%
+                  {downHitRate === 0 ? '수집 중' : `${downHitRate.toFixed(1)}%`}
                 </td>
                 <td className={`text-center font-semibold ${getPrecisionColor(avgHitRate)}`}>
-                  {avgHitRate.toFixed(1)}%
+                  {avgHitRate === 0 ? '수집 중' : `${avgHitRate.toFixed(1)}%`}
                 </td>
                 <td className="text-center">
                   {isTrained ? (

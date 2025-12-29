@@ -139,7 +139,7 @@ export default function OverviewTab({ data, tr }) {
                       model.hit_rate >= 0.3 ? 'text-blue-400' :
                       'text-gray-400'
                     }`}>
-                      {(model.hit_rate * 100).toFixed(1)}%
+                      {model.hit_rate === 0 ? '수집 중' : `${(model.hit_rate * 100).toFixed(1)}%`}
                     </span>
                   </div>
                   <div className="col-span-2 text-right">

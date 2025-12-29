@@ -200,8 +200,8 @@ export default function TickerCard({ prediction, onClick, onDetailClick }) {
         </div>
         <div className="flex items-center justify-between">
           <span>Precision:</span>
-          <span className={`font-semibold ${hit_rate >= 50 ? 'text-green-400' : hit_rate >= 30 ? 'text-blue-400' : hit_rate > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {hit_rate.toFixed(0)}%{hit_rate === 0 && ' ⚠️'}
+          <span className={`font-semibold ${hit_rate >= 50 ? 'text-green-400' : hit_rate >= 30 ? 'text-blue-400' : hit_rate > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {hit_rate === 0 ? '수집 중' : `${hit_rate.toFixed(0)}%`}
           </span>
         </div>
         <div className="flex items-center justify-between">
