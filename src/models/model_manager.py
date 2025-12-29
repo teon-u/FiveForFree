@@ -438,18 +438,44 @@ class ModelManager:
                         'source': 'db'  # Indicate data source for debugging
                     }
                 else:
-                    # No data available
+                    # Option D: Fallback priority for initial metrics
+                    # 3순위: initial_precision (validation 기반)
+                    # 4순위: train_accuracy (최후 fallback)
+                    initial_precision = getattr(model, 'initial_precision', 0.0)
+                    initial_recall = getattr(model, 'initial_recall', 0.0)
+                    train_accuracy = getattr(model, 'train_accuracy', 0.0)
+                    validation_samples = getattr(model, 'validation_samples', 0)
+
+                    if initial_precision > 0:
+                        # 3순위: Use validation metrics
+                        precision = initial_precision
+                        recall = initial_recall
+                        source = 'validation'
+                        total_predictions = validation_samples
+                    elif train_accuracy > 0:
+                        # 4순위: Use training accuracy as fallback
+                        precision = train_accuracy
+                        recall = 0.0  # No recall info from train_accuracy alone
+                        source = 'training'
+                        total_predictions = getattr(model, 'training_samples', 0)
+                    else:
+                        # No data available at all
+                        precision = 0.0
+                        recall = 0.0
+                        source = 'none'
+                        total_predictions = 0
+
                     performances[target][model_type] = {
-                        'hit_rate_50h': 0.0,
-                        'precision': 0.0,
-                        'recall': 0.0,
-                        'signal_rate': 0.0,
+                        'hit_rate_50h': precision * 100,  # Precision as percentage
+                        'precision': precision,
+                        'recall': recall,
+                        'signal_rate': 0.0,  # No signal rate from initial metrics
                         'signal_count': 0,
-                        'practicality_grade': 'D',
-                        'total_predictions': 0,
+                        'practicality_grade': self._calculate_practicality_grade(precision, 0.0),
+                        'total_predictions': total_predictions,
                         'is_trained': model.is_trained,
                         'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None,
-                        'source': 'none'  # No data available
+                        'source': source  # 'validation', 'training', or 'none'
                     }
 
         return performances

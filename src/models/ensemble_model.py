@@ -262,41 +262,35 @@ class EnsembleModel(BaseModel):
                 logger.info("Trained LogisticRegression meta-learner")
 
         self.is_trained = True
-        self._update_last_trained()
+        self._update_last_trained(n_samples=len(X))
 
-        # Calculate and store train accuracy using validation set
+        # Calculate validation metrics (Option D)
         try:
             if X_val is not None and y_val is not None:
-                y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
+                X_val_arr = np.asarray(X_val)
                 y_val_arr = np.asarray(y_val)
+                y_pred = self.predict_proba(X_val_arr)
                 # Handle prediction length mismatch (sequence models return fewer predictions)
                 min_len = min(len(y_pred), len(y_val_arr))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_val_arr[-min_len:]))
+                self.calculate_validation_metrics(
+                    X_val_arr[-min_len:],
+                    y_val_arr[-min_len:]
+                )
                 logger.info(
                     f"Ensemble trained for {self.ticker} {self.target} "
                     f"with {len(self._trained_base_models)} base models, "
-                    f"strategy: {self._strategy.value}, val_acc={self.train_accuracy:.2%}"
+                    f"strategy: {self._strategy.value}"
                 )
             else:
-                # Fallback: use training accuracy (like other models)
+                # Fallback: use training data
                 X_train_np = np.asarray(X)
                 y_train_np = np.asarray(y)
-                y_pred = (self.predict_proba(X_train_np) >= 0.5).astype(int)
-                # Handle prediction length mismatch (sequence models return fewer predictions)
+                y_pred = self.predict_proba(X_train_np)
                 min_len = min(len(y_pred), len(y_train_np))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_train_np[-min_len:]))
-                logger.info(
-                    f"Ensemble trained for {self.ticker} {self.target} "
-                    f"with {len(self._trained_base_models)} base models, "
-                    f"strategy: {self._strategy.value}, train_acc={self.train_accuracy:.2%}"
-                )
+                self.calculate_validation_metrics(X_train_np[-min_len:], y_train_np[-min_len:])
+                logger.warning(f"Ensemble [{self.ticker}/{self.target}]: No validation set, using training data for metrics")
         except Exception as e:
-            logger.warning(f"Could not calculate train_accuracy for Ensemble {self.ticker} {self.target}: {e}")
-            logger.info(
-                f"Ensemble trained for {self.ticker} {self.target} "
-                f"with {len(self._trained_base_models)} base models, "
-                f"strategy: {self._strategy.value}"
-            )
+            logger.warning(f"Ensemble [{self.ticker}/{self.target}]: Could not calculate validation metrics: {e}")
 
     def _predict_precision_weighted(self, base_predictions: Dict[str, np.ndarray]) -> np.ndarray:
         """Predict using precision-weighted voting."""

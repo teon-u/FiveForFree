@@ -245,22 +245,30 @@ class LSTMModel(BaseModel):
             self._best_val_loss = best_val_loss
 
         self.is_trained = True
-        self._update_last_trained()
+        self._update_last_trained(n_samples=len(X))
 
-        # Calculate and store train accuracy using validation set
+        # Calculate validation metrics (Option D)
         try:
             if X_val is not None and y_val is not None:
-                y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
+                X_val_arr = np.asarray(X_val)
                 y_val_arr = np.asarray(y_val)
-                # Handle sequence length mismatch
+                # Adjust for sequence predictions
+                y_pred = self.predict_proba(X_val_arr)
                 min_len = min(len(y_pred), len(y_val_arr))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_val_arr[:min_len]))
-                logger.info(f"LSTM model trained for {self.ticker} {self.target} (val_acc={self.train_accuracy:.2%})")
+                self.calculate_validation_metrics(
+                    X_val_arr[:min_len],
+                    y_val_arr[:min_len]
+                )
             else:
-                logger.info(f"LSTM model trained for {self.ticker} {self.target}")
+                # Fallback: use training data
+                X_arr = np.asarray(X)
+                y_arr = np.asarray(y)
+                y_pred = self.predict_proba(X_arr)
+                min_len = min(len(y_pred), len(y_arr))
+                self.calculate_validation_metrics(X_arr[:min_len], y_arr[:min_len])
+                logger.warning(f"LSTM [{self.ticker}/{self.target}]: No validation set, using training data for metrics")
         except Exception as e:
-            logger.warning(f"Could not calculate train_accuracy for LSTM {self.ticker} {self.target}: {e}")
-            logger.info(f"LSTM model trained for {self.ticker} {self.target}")
+            logger.warning(f"LSTM [{self.ticker}/{self.target}]: Could not calculate validation metrics: {e}")
 
     def predict_proba(self, X) -> np.ndarray:
         """Predict probabilities."""
