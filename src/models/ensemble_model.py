@@ -468,6 +468,54 @@ class EnsembleModel(BaseModel):
             self._strategy_weights = {k: v/total for k, v in weights.items()}
             logger.info(f"Strategy weights updated: {self._strategy_weights}")
 
+    def refresh_weights(self) -> bool:
+        """
+        Refresh ensemble weights based on latest precision data.
+
+        Called periodically by scheduler to update weights dynamically
+        based on recent prediction_history performance.
+
+        Returns:
+            True if weights were updated, False if no changes or error
+        """
+        if self._model_manager is None:
+            logger.warning(f"Ensemble [{self.ticker}/{self.target}]: Cannot refresh weights - no model_manager")
+            return False
+
+        try:
+            old_weights = self._precision_weights.copy()
+            old_best = self._best_model
+
+            # Re-fetch precisions from base models
+            self._base_model_precisions = self._get_model_precisions()
+
+            # Recalculate weights
+            self._precision_weights = self._calculate_precision_weights()
+
+            # Update best model for dynamic selection
+            if self._base_model_precisions:
+                self._best_model = max(
+                    self._base_model_precisions.items(),
+                    key=lambda x: x[1]
+                )[0]
+
+            # Check if weights changed
+            weights_changed = (old_weights != self._precision_weights) or (old_best != self._best_model)
+
+            if weights_changed:
+                logger.info(
+                    f"Ensemble [{self.ticker}/{self.target}]: Weights refreshed - "
+                    f"best_model: {self._best_model}, weights: {self._precision_weights}"
+                )
+            else:
+                logger.debug(f"Ensemble [{self.ticker}/{self.target}]: Weights unchanged after refresh")
+
+            return weights_changed
+
+        except Exception as e:
+            logger.error(f"Ensemble [{self.ticker}/{self.target}]: Failed to refresh weights: {e}")
+            return False
+
     def __getstate__(self):
         """Customize pickle serialization to exclude _model_manager."""
         state = self.__dict__.copy()

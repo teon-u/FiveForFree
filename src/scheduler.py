@@ -720,6 +720,12 @@ class NASDAQScheduler:
                 logger.info(
                     f"Outcome update complete: {total_updated}/{total_checked} predictions updated"
                 )
+
+                # Refresh ensemble weights after outcomes are updated
+                try:
+                    self.model_manager.refresh_all_ensemble_weights()
+                except Exception as e:
+                    logger.warning(f"Failed to refresh ensemble weights: {e}")
             else:
                 logger.debug(f"Outcome update: no pending predictions to update")
 

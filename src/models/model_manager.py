@@ -712,3 +712,35 @@ class ModelManager:
                 results[key] = False
 
         return results
+
+    def refresh_all_ensemble_weights(self) -> Dict[str, bool]:
+        """
+        Refresh weights for all ensemble models across all tickers.
+
+        Called periodically by scheduler to update ensemble weights
+        based on latest prediction_history performance.
+
+        Returns:
+            Dict with {ticker_target: weights_changed}
+        """
+        results: Dict[str, bool] = {}
+
+        for ticker in self._tickers:
+            for target in ['up', 'down']:
+                key = f"{ticker}_{target}"
+                try:
+                    if ticker in self._models and 'ensemble' in self._models[ticker]:
+                        if target in self._models[ticker]['ensemble']:
+                            ensemble = self._models[ticker]['ensemble'][target]
+                            changed = ensemble.refresh_weights()
+                            results[key] = changed
+                except Exception as e:
+                    logger.warning(f"Failed to refresh ensemble weights for {key}: {e}")
+                    results[key] = False
+
+        # Log summary
+        refreshed = sum(1 for v in results.values() if v)
+        if refreshed > 0:
+            logger.info(f"Refreshed ensemble weights: {refreshed}/{len(results)} updated")
+
+        return results
