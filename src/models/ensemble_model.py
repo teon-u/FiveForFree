@@ -104,7 +104,13 @@ class EnsembleModel(BaseModel):
         self._model_manager = model_manager
 
     def _get_model_precisions(self) -> Dict[str, float]:
-        """Get precision for each base model from prediction history."""
+        """
+        Get precision for each base model.
+
+        Priority:
+        1. Realtime precision from prediction_history (50h)
+        2. Fallback: initial_precision from validation set (Option A)
+        """
         precisions = {}
 
         if self._model_manager is None:
@@ -117,19 +123,26 @@ class EnsembleModel(BaseModel):
                 )
 
                 if base_model.is_trained:
-                    # Get precision from model's prediction history
+                    # 1순위: realtime precision from prediction_history
                     precision = base_model.get_precision_at_threshold(
                         threshold=0.7,
                         hours=50
                     )
+
                     if precision is not None and precision > 0:
                         precisions[model_type] = precision
-                        logger.debug(f"{model_type} precision: {precision:.2%}")
-                    # No default value - only use actual precision for dynamic weights
+                        logger.debug(f"{model_type} precision (realtime): {precision:.2%}")
+                    else:
+                        # 2순위: initial_precision from validation set
+                        initial_prec = getattr(base_model, 'initial_precision', 0.0)
+                        if initial_prec > 0:
+                            precisions[model_type] = initial_prec
+                            logger.debug(f"{model_type} precision (validation): {initial_prec:.2%}")
+                        else:
+                            logger.debug(f"{model_type}: no precision data available")
 
             except Exception as e:
                 logger.warning(f"Failed to get precision for {model_type}: {e}")
-                # No default value - skip models without precision data
 
         return precisions
 
