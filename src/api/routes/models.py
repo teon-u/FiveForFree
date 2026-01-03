@@ -19,6 +19,30 @@ router = APIRouter(
 )
 
 
+def _infer_training_status(is_trained: bool, last_trained: Optional[str]) -> str:
+    """
+    Infer training status from model state (Option A: simple inference).
+
+    Status values:
+    - "completed": Model is trained and ready for predictions
+    - "failed": Model was trained before but failed to load (file issue)
+    - "not_started": Model has never been trained
+    - "training": Reserved for future use (requires state tracking)
+
+    Inference logic:
+    - is_trained=True → "completed"
+    - is_trained=False AND last_trained is not None → "failed"
+    - is_trained=False AND last_trained is None → "not_started"
+    """
+    if is_trained:
+        return "completed"
+    elif last_trained is not None:
+        # Was trained before but is_trained=False means load failure
+        return "failed"
+    else:
+        return "not_started"
+
+
 class ModelPerformanceMetrics(BaseModel):
     """Model performance metrics."""
 
@@ -32,6 +56,7 @@ class ModelPerformanceMetrics(BaseModel):
     signal_count: int = Field(0, description="Number of buy signals")
     is_trained: bool = Field(..., description="Whether model is trained")
     last_trained: Optional[str] = Field(None, description="Last training timestamp")
+    training_status: str = Field("not_started", description="Training status (not_started, training, completed, failed)")
 
 
 class ModelComparisonResponse(BaseModel):
@@ -114,6 +139,9 @@ async def get_model_performance(
                         signal_count=metrics.get("signal_count", 0),
                         is_trained=metrics["is_trained"],
                         last_trained=metrics["last_trained"],
+                        training_status=_infer_training_status(
+                            metrics["is_trained"], metrics["last_trained"]
+                        ),
                     )
                 )
 
@@ -133,6 +161,9 @@ async def get_model_performance(
                         signal_count=metrics.get("signal_count", 0),
                         is_trained=metrics["is_trained"],
                         last_trained=metrics["last_trained"],
+                        training_status=_infer_training_status(
+                            metrics["is_trained"], metrics["last_trained"]
+                        ),
                     )
                 )
 
@@ -222,6 +253,9 @@ async def get_all_models_performance(
                                 signal_count=metrics.get("signal_count", 0),
                                 is_trained=metrics["is_trained"],
                                 last_trained=metrics["last_trained"],
+                                training_status=_infer_training_status(
+                                    metrics["is_trained"], metrics["last_trained"]
+                                ),
                             )
                         )
 
@@ -241,6 +275,9 @@ async def get_all_models_performance(
                                 signal_count=metrics.get("signal_count", 0),
                                 is_trained=metrics["is_trained"],
                                 last_trained=metrics["last_trained"],
+                                training_status=_infer_training_status(
+                                    metrics["is_trained"], metrics["last_trained"]
+                                ),
                             )
                         )
 

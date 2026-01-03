@@ -259,7 +259,8 @@ class ModelManager:
         """
         Get the best performing model for a ticker and target.
 
-        Based on 50-hour hit rate performance.
+        Applies minimum criteria (precision threshold, sample count).
+        Falls back to best available if no model meets criteria.
 
         Args:
             ticker: Ticker symbol
@@ -276,24 +277,46 @@ class ModelManager:
         if ticker not in self._models:
             raise ValueError(f"No models found for ticker {ticker}")
 
-        best_model = None
-        best_model_type = None
-        best_hit_rate = -1.0
+        # Collect all candidates with their metrics
+        candidates = []  # [(model_type, model, hit_rate, sample_count)]
 
         for model_type, targets in self._models[ticker].items():
             if target in targets:
                 model = targets[target]
                 if model.is_trained:
                     hit_rate = model.get_recent_accuracy(hours=settings.BACKTEST_HOURS)
-                    if hit_rate > best_hit_rate:
-                        best_hit_rate = hit_rate
-                        best_model = model
-                        best_model_type = model_type
+                    sample_count = len([p for p in model.prediction_history if p.get('actual_outcome') is not None])
+                    candidates.append((model_type, model, hit_rate, sample_count))
 
-        if best_model is None:
+        if not candidates:
             raise ValueError(f"No trained models found for {ticker} {target}")
 
-        return best_model_type, best_model
+        # Filter by minimum criteria
+        min_precision = settings.MIN_PRECISION_THRESHOLD
+        min_samples = settings.MIN_PREDICTION_SAMPLES
+
+        qualified = [
+            (mt, m, hr, sc) for mt, m, hr, sc in candidates
+            if hr >= min_precision and sc >= min_samples
+        ]
+
+        if qualified:
+            # Select best from qualified models
+            best = max(qualified, key=lambda x: x[2])
+            return best[0], best[1]
+        else:
+            # No model meets criteria - fallback to best available with warning
+            best = max(candidates, key=lambda x: x[2])
+            best_model_type, best_model, best_hit_rate, best_samples = best
+
+            logger.warning(
+                f"[{ticker}/{target}] No model meets criteria "
+                f"(min_precision={min_precision:.0%}, min_samples={min_samples}). "
+                f"Using fallback: {best_model_type} "
+                f"(hit_rate={best_hit_rate:.1%}, samples={best_samples})"
+            )
+
+            return best_model_type, best_model
 
     def get_all_models(self, ticker: str, target: str) -> Dict[str, BaseModel]:
         """
@@ -438,18 +461,44 @@ class ModelManager:
                         'source': 'db'  # Indicate data source for debugging
                     }
                 else:
-                    # No data available
+                    # Option D: Fallback priority for initial metrics
+                    # 3순위: initial_precision (validation 기반)
+                    # 4순위: train_accuracy (최후 fallback)
+                    initial_precision = getattr(model, 'initial_precision', 0.0)
+                    initial_recall = getattr(model, 'initial_recall', 0.0)
+                    train_accuracy = getattr(model, 'train_accuracy', 0.0)
+                    validation_samples = getattr(model, 'validation_samples', 0)
+
+                    if initial_precision > 0:
+                        # 3순위: Use validation metrics
+                        precision = initial_precision
+                        recall = initial_recall
+                        source = 'validation'
+                        total_predictions = validation_samples
+                    elif train_accuracy > 0:
+                        # 4순위: Use training accuracy as fallback
+                        precision = train_accuracy
+                        recall = 0.0  # No recall info from train_accuracy alone
+                        source = 'training'
+                        total_predictions = getattr(model, 'training_samples', 0)
+                    else:
+                        # No data available at all
+                        precision = 0.0
+                        recall = 0.0
+                        source = 'none'
+                        total_predictions = 0
+
                     performances[target][model_type] = {
-                        'hit_rate_50h': 0.0,
-                        'precision': 0.0,
-                        'recall': 0.0,
-                        'signal_rate': 0.0,
+                        'hit_rate_50h': precision * 100,  # Precision as percentage
+                        'precision': precision,
+                        'recall': recall,
+                        'signal_rate': 0.0,  # No signal rate from initial metrics
                         'signal_count': 0,
-                        'practicality_grade': 'D',
-                        'total_predictions': 0,
+                        'practicality_grade': self._calculate_practicality_grade(precision, 0.0),
+                        'total_predictions': total_predictions,
                         'is_trained': model.is_trained,
                         'last_trained': model.last_trained.isoformat() if hasattr(model, 'last_trained') and model.last_trained else None,
-                        'source': 'none'  # No data available
+                        'source': source  # 'validation', 'training', or 'none'
                     }
 
         return performances
@@ -684,5 +733,37 @@ class ModelManager:
             except Exception as e:
                 logger.error(f"Failed to train {key} for {ticker}: {e}")
                 results[key] = False
+
+        return results
+
+    def refresh_all_ensemble_weights(self) -> Dict[str, bool]:
+        """
+        Refresh weights for all ensemble models across all tickers.
+
+        Called periodically by scheduler to update ensemble weights
+        based on latest prediction_history performance.
+
+        Returns:
+            Dict with {ticker_target: weights_changed}
+        """
+        results: Dict[str, bool] = {}
+
+        for ticker in self._tickers:
+            for target in ['up', 'down']:
+                key = f"{ticker}_{target}"
+                try:
+                    if ticker in self._models and 'ensemble' in self._models[ticker]:
+                        if target in self._models[ticker]['ensemble']:
+                            ensemble = self._models[ticker]['ensemble'][target]
+                            changed = ensemble.refresh_weights()
+                            results[key] = changed
+                except Exception as e:
+                    logger.warning(f"Failed to refresh ensemble weights for {key}: {e}")
+                    results[key] = False
+
+        # Log summary
+        refreshed = sum(1 for v in results.values() if v)
+        if refreshed > 0:
+            logger.info(f"Refreshed ensemble weights: {refreshed}/{len(results)} updated")
 
         return results

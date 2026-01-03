@@ -283,22 +283,30 @@ class TransformerModel(BaseModel):
             self._best_val_loss = best_val_loss
 
         self.is_trained = True
-        self._update_last_trained()
+        self._update_last_trained(n_samples=len(X))
 
-        # Calculate and store train accuracy using validation set
+        # Calculate validation metrics (Option D)
         try:
             if X_val is not None and y_val is not None:
-                y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
+                X_val_arr = np.asarray(X_val)
                 y_val_arr = np.asarray(y_val)
-                # Handle sequence length mismatch
+                # Adjust for sequence predictions
+                y_pred = self.predict_proba(X_val_arr)
                 min_len = min(len(y_pred), len(y_val_arr))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_val_arr[:min_len]))
-                logger.info(f"Transformer model trained for {self.ticker} {self.target} (val_acc={self.train_accuracy:.2%})")
+                self.calculate_validation_metrics(
+                    X_val_arr[:min_len],
+                    y_val_arr[:min_len]
+                )
             else:
-                logger.info(f"Transformer model trained for {self.ticker} {self.target}")
+                # Fallback: use training data
+                X_arr = np.asarray(X)
+                y_arr = np.asarray(y)
+                y_pred = self.predict_proba(X_arr)
+                min_len = min(len(y_pred), len(y_arr))
+                self.calculate_validation_metrics(X_arr[:min_len], y_arr[:min_len])
+                logger.warning(f"Transformer [{self.ticker}/{self.target}]: No validation set, using training data for metrics")
         except Exception as e:
-            logger.warning(f"Could not calculate train_accuracy for Transformer {self.ticker} {self.target}: {e}")
-            logger.info(f"Transformer model trained for {self.ticker} {self.target}")
+            logger.warning(f"Transformer [{self.ticker}/{self.target}]: Could not calculate validation metrics: {e}")
 
     def predict_proba(self, X) -> np.ndarray:
         """Predict probabilities."""
@@ -351,8 +359,25 @@ class TransformerModel(BaseModel):
     def load(self, path: Path):
         """Load model from disk."""
         super().load(path)
+
         pt_path = path.with_suffix('.pt')
-        if pt_path.exists() and HAS_TORCH:
+        scaler_path = path.with_suffix('.scaler')
+
+        # Check if required files exist
+        if not pt_path.exists():
+            logger.warning(f"Transformer [{self.ticker}/{self.target}]: .pt file not found at {pt_path}")
+            self.is_trained = False
+            self._model = None
+            return
+
+        if not HAS_TORCH:
+            logger.warning(f"Transformer [{self.ticker}/{self.target}]: PyTorch not available, cannot load model")
+            self.is_trained = False
+            self._model = None
+            return
+
+        # Try to load .pt file
+        try:
             checkpoint = torch.load(pt_path, map_location=self._device)
 
             # Handle both old format (just state_dict) and new format (dict with input_size)
@@ -373,9 +398,28 @@ class TransformerModel(BaseModel):
                 dropout=self.dropout
             ).to(self._device)
             self._model.load_state_dict(state_dict)
+            logger.debug(f"Transformer [{self.ticker}/{self.target}]: Successfully loaded .pt file")
 
-        # Load scaler
-        scaler_path = path.with_suffix('.scaler')
+        except Exception as e:
+            logger.error(f"Transformer [{self.ticker}/{self.target}]: Failed to load .pt file: {e}")
+            self.is_trained = False
+            self._model = None
+            return
+
+        # Try to load scaler
         if scaler_path.exists():
-            with open(scaler_path, 'rb') as f:
-                self._scaler = pickle.load(f)
+            try:
+                with open(scaler_path, 'rb') as f:
+                    self._scaler = pickle.load(f)
+                logger.debug(f"Transformer [{self.ticker}/{self.target}]: Successfully loaded scaler")
+            except Exception as e:
+                logger.error(f"Transformer [{self.ticker}/{self.target}]: Failed to load scaler: {e}")
+                self.is_trained = False
+                self._model = None
+                self._scaler = None
+                return
+        else:
+            logger.warning(f"Transformer [{self.ticker}/{self.target}]: Scaler file not found at {scaler_path}")
+            self.is_trained = False
+            self._model = None
+            self._scaler = None

@@ -133,21 +133,17 @@ class LightGBMModel(BaseModel):
                 raise
 
         self.is_trained = True
-        self._update_last_trained()
+        self._update_last_trained(n_samples=len(np.asarray(X)))
 
-        # Calculate and store train accuracy using validation set
+        # Calculate validation metrics (Option D)
         if X_val is not None and y_val is not None:
-            y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
-            y_val_arr = np.asarray(y_val)
-            self.train_accuracy = float(np.mean(y_pred == y_val_arr))
-            logger.info(f"LightGBM model trained for {self.ticker} {self.target} (val_acc={self.train_accuracy:.2%})")
+            self.calculate_validation_metrics(np.asarray(X_val), np.asarray(y_val))
         else:
-            # Fallback: use training accuracy
+            # Fallback: use training data for metrics (less reliable)
             X_train_np = np.asarray(X)
             y_train_np = np.asarray(y)
-            y_pred = (self.predict_proba(X_train_np) >= 0.5).astype(int)
-            self.train_accuracy = float(np.mean(y_pred == y_train_np))
-            logger.info(f"LightGBM model trained for {self.ticker} {self.target} (train_acc={self.train_accuracy:.2%})")
+            self.calculate_validation_metrics(X_train_np, y_train_np)
+            logger.warning(f"LightGBM [{self.ticker}/{self.target}]: No validation set, using training data for metrics")
 
     def predict_proba(self, X) -> np.ndarray:
         """Predict probabilities."""

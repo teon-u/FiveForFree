@@ -15,6 +15,7 @@ import numpy as np
 from loguru import logger
 
 from src.models.base_model import BaseModel
+from config.settings import settings
 
 if TYPE_CHECKING:
     from src.models.model_manager import ModelManager
@@ -104,7 +105,13 @@ class EnsembleModel(BaseModel):
         self._model_manager = model_manager
 
     def _get_model_precisions(self) -> Dict[str, float]:
-        """Get precision for each base model from prediction history."""
+        """
+        Get precision for each base model.
+
+        Priority:
+        1. Realtime precision from prediction_history (50h)
+        2. Fallback: initial_precision from validation set (Option A)
+        """
         precisions = {}
 
         if self._model_manager is None:
@@ -117,19 +124,26 @@ class EnsembleModel(BaseModel):
                 )
 
                 if base_model.is_trained:
-                    # Get precision from model's prediction history
+                    # 1순위: realtime precision from prediction_history
                     precision = base_model.get_precision_at_threshold(
                         threshold=0.7,
                         hours=50
                     )
+
                     if precision is not None and precision > 0:
                         precisions[model_type] = precision
-                        logger.debug(f"{model_type} precision: {precision:.2%}")
-                    # No default value - only use actual precision for dynamic weights
+                        logger.debug(f"{model_type} precision (realtime): {precision:.2%}")
+                    else:
+                        # 2순위: initial_precision from validation set
+                        initial_prec = getattr(base_model, 'initial_precision', 0.0)
+                        if initial_prec > 0:
+                            precisions[model_type] = initial_prec
+                            logger.debug(f"{model_type} precision (validation): {initial_prec:.2%}")
+                        else:
+                            logger.debug(f"{model_type}: no precision data available")
 
             except Exception as e:
                 logger.warning(f"Failed to get precision for {model_type}: {e}")
-                # No default value - skip models without precision data
 
         return precisions
 
@@ -157,6 +171,41 @@ class EnsembleModel(BaseModel):
                     weights[model_type] = 1.0 / n_models
 
         return weights
+
+    def _select_best_model(self) -> Optional[str]:
+        """
+        Select best model applying minimum criteria.
+
+        Uses settings.MIN_PRECISION_THRESHOLD as filter.
+        Falls back to highest precision model with warning if no model qualifies.
+
+        Returns:
+            Best model type name, or None if no models available
+        """
+        if not self._base_model_precisions:
+            return None
+
+        min_threshold = settings.MIN_PRECISION_THRESHOLD
+
+        # Filter models meeting minimum precision
+        qualified = {
+            mt: prec for mt, prec in self._base_model_precisions.items()
+            if prec >= min_threshold
+        }
+
+        if qualified:
+            # Select best from qualified
+            best = max(qualified.items(), key=lambda x: x[1])
+            return best[0]
+        else:
+            # Fallback with warning
+            best = max(self._base_model_precisions.items(), key=lambda x: x[1])
+            logger.warning(
+                f"Ensemble [{self.ticker}/{self.target}]: "
+                f"No model meets min_precision={min_threshold:.0%}. "
+                f"Fallback to {best[0]} (precision={best[1]:.1%})"
+            )
+            return best[0]
 
     def train(self, X, y, X_val=None, y_val=None):
         """
@@ -210,13 +259,11 @@ class EnsembleModel(BaseModel):
         self._precision_weights = self._calculate_precision_weights()
         logger.info(f"Precision weights: {self._precision_weights}")
 
-        # 2. Find best model for dynamic selection
-        if self._base_model_precisions:
-            self._best_model = max(
-                self._base_model_precisions.items(),
-                key=lambda x: x[1]
-            )[0]
-            logger.info(f"Best model (by precision): {self._best_model}")
+        # 2. Find best model for dynamic selection (with minimum criteria)
+        self._best_model = self._select_best_model()
+        if self._best_model:
+            best_prec = self._base_model_precisions.get(self._best_model, 0)
+            logger.info(f"Best model: {self._best_model} (precision={best_prec:.1%})")
 
         # 3. Train stacking meta-learner
         X_meta = np.column_stack(base_predictions)
@@ -262,41 +309,35 @@ class EnsembleModel(BaseModel):
                 logger.info("Trained LogisticRegression meta-learner")
 
         self.is_trained = True
-        self._update_last_trained()
+        self._update_last_trained(n_samples=len(X))
 
-        # Calculate and store train accuracy using validation set
+        # Calculate validation metrics (Option D)
         try:
             if X_val is not None and y_val is not None:
-                y_pred = (self.predict_proba(np.asarray(X_val)) >= 0.5).astype(int)
+                X_val_arr = np.asarray(X_val)
                 y_val_arr = np.asarray(y_val)
+                y_pred = self.predict_proba(X_val_arr)
                 # Handle prediction length mismatch (sequence models return fewer predictions)
                 min_len = min(len(y_pred), len(y_val_arr))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_val_arr[-min_len:]))
+                self.calculate_validation_metrics(
+                    X_val_arr[-min_len:],
+                    y_val_arr[-min_len:]
+                )
                 logger.info(
                     f"Ensemble trained for {self.ticker} {self.target} "
                     f"with {len(self._trained_base_models)} base models, "
-                    f"strategy: {self._strategy.value}, val_acc={self.train_accuracy:.2%}"
+                    f"strategy: {self._strategy.value}"
                 )
             else:
-                # Fallback: use training accuracy (like other models)
+                # Fallback: use training data
                 X_train_np = np.asarray(X)
                 y_train_np = np.asarray(y)
-                y_pred = (self.predict_proba(X_train_np) >= 0.5).astype(int)
-                # Handle prediction length mismatch (sequence models return fewer predictions)
+                y_pred = self.predict_proba(X_train_np)
                 min_len = min(len(y_pred), len(y_train_np))
-                self.train_accuracy = float(np.mean(y_pred[:min_len] == y_train_np[-min_len:]))
-                logger.info(
-                    f"Ensemble trained for {self.ticker} {self.target} "
-                    f"with {len(self._trained_base_models)} base models, "
-                    f"strategy: {self._strategy.value}, train_acc={self.train_accuracy:.2%}"
-                )
+                self.calculate_validation_metrics(X_train_np[-min_len:], y_train_np[-min_len:])
+                logger.warning(f"Ensemble [{self.ticker}/{self.target}]: No validation set, using training data for metrics")
         except Exception as e:
-            logger.warning(f"Could not calculate train_accuracy for Ensemble {self.ticker} {self.target}: {e}")
-            logger.info(
-                f"Ensemble trained for {self.ticker} {self.target} "
-                f"with {len(self._trained_base_models)} base models, "
-                f"strategy: {self._strategy.value}"
-            )
+            logger.warning(f"Ensemble [{self.ticker}/{self.target}]: Could not calculate validation metrics: {e}")
 
     def _predict_precision_weighted(self, base_predictions: Dict[str, np.ndarray]) -> np.ndarray:
         """Predict using precision-weighted voting."""
@@ -460,6 +501,50 @@ class EnsembleModel(BaseModel):
         if total > 0:
             self._strategy_weights = {k: v/total for k, v in weights.items()}
             logger.info(f"Strategy weights updated: {self._strategy_weights}")
+
+    def refresh_weights(self) -> bool:
+        """
+        Refresh ensemble weights based on latest precision data.
+
+        Called periodically by scheduler to update weights dynamically
+        based on recent prediction_history performance.
+
+        Returns:
+            True if weights were updated, False if no changes or error
+        """
+        if self._model_manager is None:
+            logger.warning(f"Ensemble [{self.ticker}/{self.target}]: Cannot refresh weights - no model_manager")
+            return False
+
+        try:
+            old_weights = self._precision_weights.copy()
+            old_best = self._best_model
+
+            # Re-fetch precisions from base models
+            self._base_model_precisions = self._get_model_precisions()
+
+            # Recalculate weights
+            self._precision_weights = self._calculate_precision_weights()
+
+            # Update best model for dynamic selection (with minimum criteria)
+            self._best_model = self._select_best_model()
+
+            # Check if weights changed
+            weights_changed = (old_weights != self._precision_weights) or (old_best != self._best_model)
+
+            if weights_changed:
+                logger.info(
+                    f"Ensemble [{self.ticker}/{self.target}]: Weights refreshed - "
+                    f"best_model: {self._best_model}, weights: {self._precision_weights}"
+                )
+            else:
+                logger.debug(f"Ensemble [{self.ticker}/{self.target}]: Weights unchanged after refresh")
+
+            return weights_changed
+
+        except Exception as e:
+            logger.error(f"Ensemble [{self.ticker}/{self.target}]: Failed to refresh weights: {e}")
+            return False
 
     def __getstate__(self):
         """Customize pickle serialization to exclude _model_manager."""

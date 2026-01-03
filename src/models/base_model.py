@@ -56,6 +56,13 @@ class BaseModel(ABC):
         self.training_samples: int = 0
         self.train_accuracy: float = 0.0  # Training accuracy as fallback for precision
 
+        # Initial validation metrics (Option D - calculated during training)
+        # Used as fallback when prediction_history is empty
+        self.initial_precision: float = 0.0  # Precision from validation set
+        self.initial_recall: float = 0.0     # Recall from validation set
+        self.initial_f1: float = 0.0         # F1 score from validation set
+        self.validation_samples: int = 0     # Number of validation samples used
+
     @abstractmethod
     def train(self, X: np.ndarray, y: np.ndarray,
               X_val: Optional[np.ndarray] = None,
@@ -117,6 +124,75 @@ class BaseModel(ABC):
         if n_samples is not None:
             self.training_samples = n_samples
         logger.debug(f"{self.model_type} model for {self.ticker}/{self.target} trained at {self.last_trained_at}")
+
+    def calculate_validation_metrics(
+        self,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+        threshold: float = 0.5
+    ) -> dict[str, float]:
+        """
+        Calculate initial validation metrics after training (Option D).
+
+        This provides fallback metrics when prediction_history is empty.
+        Should be called at the end of train() in all child classes.
+
+        Args:
+            X_val: Validation features
+            y_val: Validation labels
+            threshold: Probability threshold for positive prediction
+
+        Returns:
+            Dictionary with precision, recall, f1, accuracy
+        """
+        try:
+            if X_val is None or y_val is None or len(X_val) == 0:
+                logger.warning(f"{self.model_type}: No validation data provided")
+                return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0, 'accuracy': 0.0}
+
+            # Get predictions
+            y_proba = self.predict_proba(X_val)
+            y_pred = (y_proba >= threshold).astype(int)
+
+            # Calculate confusion matrix
+            tp = np.sum((y_pred == 1) & (y_val == 1))
+            fp = np.sum((y_pred == 1) & (y_val == 0))
+            tn = np.sum((y_pred == 0) & (y_val == 0))
+            fn = np.sum((y_pred == 0) & (y_val == 1))
+
+            # Calculate metrics
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            accuracy = (tp + tn) / len(y_val) if len(y_val) > 0 else 0.0
+
+            # Store validation metrics
+            self.initial_precision = float(precision)
+            self.initial_recall = float(recall)
+            self.initial_f1 = float(f1)
+            self.train_accuracy = float(accuracy)
+            self.validation_samples = len(y_val)
+
+            logger.info(
+                f"{self.model_type} [{self.ticker}/{self.target}] validation metrics: "
+                f"precision={precision:.2%}, recall={recall:.2%}, f1={f1:.2%}, "
+                f"accuracy={accuracy:.2%} (n={len(y_val)})"
+            )
+
+            return {
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'accuracy': accuracy,
+                'tp': int(tp),
+                'fp': int(fp),
+                'tn': int(tn),
+                'fn': int(fn)
+            }
+
+        except Exception as e:
+            logger.error(f"{self.model_type}: Failed to calculate validation metrics: {e}")
+            return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0, 'accuracy': 0.0}
 
     def incremental_train(self, X_new: np.ndarray, y_new: np.ndarray) -> None:
         """

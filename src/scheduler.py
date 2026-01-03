@@ -82,6 +82,7 @@ class NASDAQScheduler:
             "hourly_training": {"runs": 0, "errors": 0, "last_run": None},
             "daily_retrain": {"runs": 0, "errors": 0, "last_run": None},
             "ticker_update": {"runs": 0, "errors": 0, "last_run": None},
+            "outcome_update": {"runs": 0, "errors": 0, "last_run": None, "updated": 0},
         }
 
         logger.info("NASDAQScheduler initialized")
@@ -590,6 +591,148 @@ class NASDAQScheduler:
             logger.error(f"Auto-train job failed: {e}")
             self.job_stats[job_name]["errors"] += 1
 
+    def job_update_prediction_outcomes(self) -> None:
+        """
+        Job: Update prediction outcomes for predictions made 60+ minutes ago.
+
+        Runs every 5 minutes to:
+        1. Find predictions in prediction_history with outcome=None
+        2. Check if enough time has passed (60 minutes)
+        3. Look up actual price movement from DB
+        4. Update the outcome (hit or miss)
+
+        This enables accurate hit_rate calculation for model performance.
+        """
+        job_name = "outcome_update"
+
+        try:
+            self.job_stats[job_name]["runs"] += 1
+            self.job_stats[job_name]["last_run"] = datetime.now(ET)
+
+            logger.debug("OUTCOME UPDATE JOB: Checking pending predictions...")
+
+            horizon_minutes = settings.PREDICTION_HORIZON_MINUTES
+            target_percent = settings.TARGET_PERCENT
+            cutoff_time = datetime.now() - timedelta(minutes=horizon_minutes + 5)
+
+            total_updated = 0
+            total_checked = 0
+
+            # Get all tickers with models
+            all_tickers = self.model_manager.get_tickers()
+
+            for ticker in all_tickers:
+                try:
+                    # Process each target type (up, down)
+                    for target in settings.PREDICTION_TARGETS:
+                        models = self.model_manager.get_all_models(ticker, target)
+
+                        for model_type, model in models.items():
+                            if not hasattr(model, 'prediction_history'):
+                                continue
+
+                            # Find predictions needing outcome update
+                            pending_predictions = []
+                            for pred in model.prediction_history:
+                                if (pred.get('actual_outcome') is None and
+                                    pred.get('timestamp') is not None and
+                                    pred['timestamp'] < cutoff_time):
+                                    pending_predictions.append(pred)
+
+                            if not pending_predictions:
+                                continue
+
+                            total_checked += len(pending_predictions)
+
+                            # Get price data for outcome determination
+                            for pred in pending_predictions:
+                                try:
+                                    pred_time = pred['timestamp']
+
+                                    # Query DB for price data after prediction
+                                    with get_db() as db:
+                                        from sqlalchemy import select
+
+                                        # Get the entry price (at prediction time)
+                                        stmt_entry = (
+                                            select(DBMinuteBar)
+                                            .where(DBMinuteBar.symbol == ticker.upper())
+                                            .where(DBMinuteBar.timestamp <= pred_time)
+                                            .order_by(DBMinuteBar.timestamp.desc())
+                                            .limit(1)
+                                        )
+                                        entry_bar = db.execute(stmt_entry).scalar()
+
+                                        if not entry_bar:
+                                            continue
+
+                                        entry_price = entry_bar.close
+
+                                        # Get price data for the prediction horizon
+                                        stmt_future = (
+                                            select(DBMinuteBar)
+                                            .where(DBMinuteBar.symbol == ticker.upper())
+                                            .where(DBMinuteBar.timestamp > pred_time)
+                                            .where(DBMinuteBar.timestamp <= pred_time + timedelta(minutes=horizon_minutes))
+                                            .order_by(DBMinuteBar.timestamp)
+                                        )
+                                        future_bars = db.execute(stmt_future).scalars().all()
+
+                                        if len(future_bars) < 10:
+                                            # Not enough data yet, skip
+                                            continue
+
+                                        # Calculate max gain and max loss
+                                        max_high = max(bar.high for bar in future_bars)
+                                        min_low = min(bar.low for bar in future_bars)
+
+                                        max_gain_pct = (max_high - entry_price) / entry_price * 100
+                                        max_loss_pct = (min_low - entry_price) / entry_price * 100
+
+                                        # Determine outcome based on target
+                                        if target == "up":
+                                            actual_outcome = max_gain_pct >= target_percent
+                                        else:  # down
+                                            actual_outcome = max_loss_pct <= -target_percent
+
+                                        # Update the prediction outcome
+                                        model.update_outcome(pred_time, actual_outcome)
+                                        total_updated += 1
+
+                                        logger.debug(
+                                            f"{ticker}/{target}/{model_type}: "
+                                            f"prediction at {pred_time.strftime('%H:%M')} -> "
+                                            f"{'HIT' if actual_outcome else 'MISS'} "
+                                            f"(gain={max_gain_pct:.2f}%, loss={max_loss_pct:.2f}%)"
+                                        )
+
+                                except Exception as e:
+                                    logger.warning(f"Failed to update outcome for {ticker}/{target}: {e}")
+                                    continue
+
+                except Exception as e:
+                    logger.warning(f"Error processing {ticker}: {e}")
+                    continue
+
+            self.job_stats[job_name]["updated"] += total_updated
+
+            if total_updated > 0:
+                logger.info(
+                    f"Outcome update complete: {total_updated}/{total_checked} predictions updated"
+                )
+
+                # Refresh ensemble weights after outcomes are updated
+                try:
+                    self.model_manager.refresh_all_ensemble_weights()
+                except Exception as e:
+                    logger.warning(f"Failed to refresh ensemble weights: {e}")
+            else:
+                logger.debug(f"Outcome update: no pending predictions to update")
+
+        except Exception as e:
+            logger.error(f"Outcome update job failed: {e}")
+            self.job_stats[job_name]["errors"] += 1
+
     # ========== SCHEDULER MANAGEMENT ==========
 
     def start(self) -> None:
@@ -674,6 +817,17 @@ class NASDAQScheduler:
             coalesce=True,
         )
         logger.info("✓ Scheduled: Auto-train new tickers every hour")
+
+        # Job 7: Update prediction outcomes - Check outcomes for 60+ minute old predictions
+        self.scheduler.add_job(
+            self.job_update_prediction_outcomes,
+            trigger=IntervalTrigger(minutes=5, timezone=ET),
+            id="outcome_update",
+            name="Update Prediction Outcomes",
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("✓ Scheduled: Update prediction outcomes every 5 minutes")
 
         # Initialize ticker list immediately
         logger.info("\nInitializing ticker list...")
